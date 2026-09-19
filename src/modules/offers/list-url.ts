@@ -14,10 +14,10 @@ export type OfferListOverrides = Partial<{
   page: number;
 }>;
 
-export function buildOffersUrl(
+function buildOffersParams(
   filters: OfferListFilters,
   overrides: OfferListOverrides = {},
-): string {
+): URLSearchParams {
   const params = new URLSearchParams();
   const sort = overrides.sort ?? filters.sort;
   const dir = overrides.dir ?? filters.dir;
@@ -50,6 +50,12 @@ export function buildOffersUrl(
   if (filters.originId) {
     params.set("originId", filters.originId);
   }
+  // Preservar el ámbito (activas/archivadas, bloque 7) en cualquier enlace
+  // derivado del listado: ordenar, paginar o exportar desde «Ofertas
+  // archivadas» debe seguir viendo archivadas, nunca volver a activas.
+  if (filters.scope === "archivadas") {
+    params.set("scope", filters.scope);
+  }
 
   params.set("sort", sort);
   params.set("dir", dir);
@@ -57,7 +63,19 @@ export function buildOffersUrl(
     params.set("page", String(page));
   }
 
-  return `/offers?${params.toString()}`;
+  return params;
+}
+
+export function buildOffersUrl(
+  filters: OfferListFilters,
+  overrides: OfferListOverrides = {},
+): string {
+  return `/offers?${buildOffersParams(filters, overrides).toString()}`;
+}
+
+/** URL de exportación a Excel con exactamente los mismos filtros y ámbito. */
+export function buildOffersExportUrl(filters: OfferListFilters): string {
+  return `/offers/export?${buildOffersParams(filters).toString()}`;
 }
 
 /** Dirección que debe aplicar un encabezado de columna al pulsarlo. */

@@ -700,7 +700,7 @@ export function offerScopeWhere(user: AuthenticatedUser): Prisma.OfferWhereInput
   };
 }
 
-function buildOfferWhere(
+export function buildOfferWhere(
   filters: OfferListFilters,
   availableYears: readonly number[],
   user: AuthenticatedUser,
@@ -764,7 +764,7 @@ function buildOfferWhere(
   return where;
 }
 
-function buildOfferOrderBy(
+export function buildOfferOrderBy(
   filters: OfferListFilters,
 ): Prisma.OfferOrderByWithRelationInput[] {
   const dir = filters.dir;
@@ -871,7 +871,7 @@ export async function getOffersPage(
 }
 
 /** Años distintos con ofertas no eliminadas, de más reciente a más antiguo. */
-async function getOfferYears(): Promise<number[]> {
+export async function getOfferYears(): Promise<number[]> {
   const rows = await prisma.$queryRaw<Array<{ year: number }>>`
     SELECT DISTINCT EXTRACT(YEAR FROM "offer_date")::int AS year
       FROM "offers"
