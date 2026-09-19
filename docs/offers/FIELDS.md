@@ -42,9 +42,12 @@ Desde DEV-003 este formulario existe realmente en `/offers/new` (alta) y `/offer
 - Fecha estimada de cartera.
 - Segmentación.
 - Observaciones.
-- Idioma.
 - Pedido o identificador de Navision — **obligatorio cuando el estado es `Aceptado`** (`DEC-052`, implementado; ver [`STATUSES.md`](STATUSES.md)), opcional en el resto de estados.
 - Motivo de cancelación — obligatorio únicamente cuando el estado de la oferta sea `Anulado`.
+
+## Idioma retirado (hotfix DEV-005)
+
+`Idioma` procedía del Excel histórico y no se usaba de forma clara. Se retira de toda la experiencia funcional: alta, edición, ficha, Administración > Maestros de oferta, filtros, exportación y nuevas instantáneas de versión. No se añade ningún sustituto. La tabla `Language` y la columna `Offer.languageId` se conservan deprecadas y sin uso funcional por compatibilidad técnica con datos e instantáneas de versión ya existentes (ver [`../decisions/DECISIONS.md`](../decisions/DECISIONS.md)).
 
 ## Implantación
 

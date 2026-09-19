@@ -28,9 +28,10 @@ Desde DEV-004, `Client.code` es obligatorio y único al crear o editar un client
 - **Estados de oferta**: ver detalle y evolución prevista en [`../offers/STATUSES.md`](../offers/STATUSES.md).
 - **Segmentaciones**: ver valores conocidos en [`../offers/BUSINESS_RULES.md`](../offers/BUSINESS_RULES.md).
 - **Motivos de cancelación**.
-- **Idiomas**.
 
 Los valores concretos, obligatoriedad y reglas de uso de cada uno de estos maestros dentro del formulario de oferta están detallados en [`../offers/FIELDS.md`](../offers/FIELDS.md).
+
+> **Idiomas** (`Language`) queda `@deprecated` desde el hotfix DEV-005: se retiró de toda la experiencia funcional del Gestor de Ofertas (formulario, ficha, Administración, filtros y exportación) y ya no aparece en `/admin/master-data`. La tabla se conserva vacía y sin uso, por compatibilidad técnica (ver [`../decisions/DECISIONS.md`](../decisions/DECISIONS.md)).
 
 ## Maestros futuros, todavía no diseñados
 
@@ -42,8 +43,8 @@ Los valores concretos, obligatoriedad y reglas de uso de cada uno de estos maest
 | Pantalla | Qué permite |
 |---|---|
 | `/admin/clients` | Crear un cliente, editar su nombre y activarlo o desactivarlo. Búsqueda por nombre y filtro por activo/inactivo. |
-| `/admin/people` | Crear una persona, editar su nombre y sus dos habilitaciones, y activarla o desactivarla. Búsqueda por nombre y filtros por habilitación comercial, habilitación PM y estado. |
-| `/admin/master-data` | Crear, editar y activar o desactivar registros de los ocho catálogos. |
+| `/admin/people` («Personas y accesos», hotfix DEV-005) | Crear una persona, editar su nombre y sus dos habilitaciones, activarla o desactivarla, y crear o administrar su acceso (usuario, rol, activación y contraseña temporal) desde la misma fila. Búsqueda por nombre y filtros por habilitación comercial, habilitación PM y estado. Solo `ADMIN`, comprobado en servidor. |
+| `/admin/master-data` | Crear, editar y activar o desactivar registros de los siete catálogos vigentes (`Idioma` quedó retirado en el hotfix DEV-005). |
 
 Reglas comunes aplicadas en las tres pantallas:
 

@@ -80,7 +80,7 @@ Estado tras DEV-004, en `prisma/schema.prisma`:
 - **Origin**: origen de la oferta.
 - **Segmentation**: segmentación de la oferta.
 - **CancellationReason**: motivo de cancelación, obligatorio cuando el estado de la oferta es `Anulado`.
-- **Language**: idioma de la oferta.
+- **Language**: `@deprecated` (hotfix DEV-005). `Idioma` se retiró de toda la experiencia funcional del Gestor de Ofertas; esta tabla y `Offer.languageId` se conservan sin uso, por compatibilidad con datos e instantáneas de versión ya existentes, pendientes de limpieza física futura.
 
 ### Numeración
 
@@ -95,13 +95,13 @@ Estado tras DEV-004, en `prisma/schema.prisma`:
 
 ### Auditoría e importación
 
-- **AuditLog**: registro de auditoría de altas, modificaciones, cambios de estado, revisiones, archivo/recuperación, comentarios, adjuntos, gestión de usuarios, reglas de notificación y ajustes del contador (ver [`SECURITY.md`](SECURITY.md)). `actorId` es nullable: `null` para todo lo anterior al login de DEV-004.
+- **AuditLog**: registro de auditoría de altas, modificaciones, cambios de estado, revisiones, comentarios, adjuntos, gestión de usuarios, reglas de notificación y ajustes del contador (ver [`SECURITY.md`](SECURITY.md)). `actorId` es nullable: `null` para todo lo anterior al login de DEV-004. Conserva también las acciones históricas `ARCHIVE`/`RESTORE` de DEV-004: desde el hotfix DEV-005 no se generan eventos nuevos de ese tipo (`DEC-016` sustituida), pero el histórico ya existente no se reescribe.
 - **ImportBatch**: lote de importación de datos históricos, con sistema de origen, fecha y trazabilidad del proceso.
 - **ImportIssue**: incidencia detectada durante una importación, asociada a un `ImportBatch` y, cuando aplique, a la oferta afectada. Ver incidencias conocidas del histórico en [`../offers/MIGRATION.md`](../offers/MIGRATION.md).
 
 ## Relaciones principales (resumen)
 
-- `Offer` → `Client`, `Person` (comercial), `Person` (PM), `Priority`, `Origin`, `OfferType`, `OfferStatus`, `Segmentation` (opcional), `CancellationReason` (condicional), `Language` (opcional), `User` (creador, opcional), `User` (archivado/recuperado por, opcional).
+- `Offer` → `Client`, `Person` (comercial), `Person` (PM), `Priority`, `Origin`, `OfferType`, `OfferStatus`, `Segmentation` (opcional), `CancellationReason` (condicional), `User` (creador, opcional). Las relaciones con `Language` y con `User` (archivado/recuperado por) quedan deprecadas y sin uso funcional (hotfix DEV-005).
 - `Offer` 1—N `OfferProfileDays` → `ProfessionalProfile`.
 - `Offer` 1—N `OfferStatusHistory` → `OfferStatus`, con actor (`User`, opcional).
 - `Offer` 1—N `OfferVersion`, `OfferComment`, `OfferAttachment`, cada una con autor (`User`, opcional).
