@@ -1113,6 +1113,25 @@ export async function getPendingReviewOffers(
     .filter((row) => filters.minDays === null || row.pendingDays >= filters.minDays);
 }
 
+export type ReviewStatusOption = { id: string; name: string; code: string };
+
+/**
+ * Estados activos seleccionables al completar una revisión (bloque 8.3).
+ *
+ * `CANCELLED` se excluye a propósito: anular exige motivo de cancelación, que
+ * esta pantalla no pide, así que `reviewOfferAction` remite al formulario
+ * completo si se elige igualmente. No repetir esa regla aquí evita que las
+ * dos listas de exclusión diverjan.
+ */
+export async function getReviewStatusOptions(): Promise<ReviewStatusOption[]> {
+  const statuses = await prisma.offerStatus.findMany({
+    where: { isActive: true, code: { not: CANCELLED_STATUS_CODE } },
+    select: { id: true, name: true, code: true },
+    orderBy: CATALOG_ORDER,
+  });
+  return statuses;
+}
+
 // ---------------------------------------------------------------------------
 // Auditoría, versiones y línea temporal de una oferta
 // ---------------------------------------------------------------------------

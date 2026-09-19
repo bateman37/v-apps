@@ -158,8 +158,10 @@ export async function getCurrentUser(): Promise<AuthenticatedUser | null> {
 }
 
 /**
- * Exige sesión. Sin ella redirige al login conservando el destino, de modo que
- * al entrar se vuelve a donde se quería ir.
+ * Exige sesión. Sin ella redirige a `/login`. El destino tras iniciar sesión
+ * se decide en el formulario (campo oculto `redirectTo`); esta función no
+ * conoce la ruta que se quería visitar, así que sin ese campo el login lleva
+ * al listado de ofertas.
  */
 export async function requireUser(): Promise<AuthenticatedUser> {
   const user = await getCurrentUser();

@@ -10,6 +10,7 @@ import {
   adminSuccess,
   type AdminActionState,
 } from "@/modules/admin/action-state";
+import { requireAdmin } from "@/modules/auth/session";
 
 /**
  * Administración del maestro común de personas.
@@ -33,6 +34,7 @@ export async function createPersonAction(
   _previousState: AdminActionState,
   formData: FormData,
 ): Promise<AdminActionState> {
+  const admin = await requireAdmin();
   const errors: FieldErrors = {};
   const name = checkField(
     errors,
@@ -58,6 +60,7 @@ export async function createPersonAction(
         entityType: "Person",
         entityId: person.id,
         action: "CREATE",
+        actorId: admin.id,
         changes: { name, canBeCommercial, canBeProjectManager, isActive: true },
       });
       return person;
@@ -74,6 +77,7 @@ export async function updatePersonAction(
   _previousState: AdminActionState,
   formData: FormData,
 ): Promise<AdminActionState> {
+  const admin = await requireAdmin();
   const id = readString(formData, "id");
   if (!id) {
     return adminError({ _form: "No se ha podido identificar la persona." });
@@ -121,6 +125,7 @@ export async function updatePersonAction(
         entityType: "Person",
         entityId: id,
         action: "UPDATE",
+        actorId: admin.id,
         changes,
       });
       return { changed: true as const };
@@ -144,6 +149,7 @@ export async function setPersonActiveAction(
   _previousState: AdminActionState,
   formData: FormData,
 ): Promise<AdminActionState> {
+  const admin = await requireAdmin();
   const id = readString(formData, "id");
   const isActive = readString(formData, "isActive") === "true";
 
@@ -169,6 +175,7 @@ export async function setPersonActiveAction(
         entityType: "Person",
         entityId: id,
         action: isActive ? "ACTIVATE" : "DEACTIVATE",
+        actorId: admin.id,
         changes: { isActive: { antes: current.isActive, despues: isActive } },
       });
       return { name: current.name, changed: true as const };

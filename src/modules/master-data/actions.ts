@@ -23,6 +23,7 @@ import {
   isCatalogKey,
   type CatalogKey,
 } from "@/modules/master-data/catalogs";
+import { requireAdmin } from "@/modules/auth/session";
 
 /**
  * Administración de los ocho catálogos del Gestor de Ofertas.
@@ -67,6 +68,7 @@ export async function createCatalogRecordAction(
   _previousState: AdminActionState,
   formData: FormData,
 ): Promise<AdminActionState> {
+  const admin = await requireAdmin();
   const catalog = resolveCatalog(formData);
   if (!catalog) {
     return adminError({ _form: "Catálogo no reconocido." });
@@ -101,6 +103,7 @@ export async function createCatalogRecordAction(
         entityType: "MasterDataRecord",
         entityId: record.id,
         action: "CREATE",
+        actorId: admin.id,
         changes: { catalogo: catalog, code, name, sortOrder, isActive: true },
       });
       return record;
@@ -126,6 +129,7 @@ export async function updateCatalogRecordAction(
   _previousState: AdminActionState,
   formData: FormData,
 ): Promise<AdminActionState> {
+  const admin = await requireAdmin();
   const catalog = resolveCatalog(formData);
   const id = readString(formData, "id");
 
@@ -177,6 +181,7 @@ export async function updateCatalogRecordAction(
         entityType: "MasterDataRecord",
         entityId: id,
         action: "UPDATE",
+        actorId: admin.id,
         changes: { catalogo: catalog, code: current.code, ...changes },
       });
       return { changed: true as const };
@@ -200,6 +205,7 @@ export async function setCatalogRecordActiveAction(
   _previousState: AdminActionState,
   formData: FormData,
 ): Promise<AdminActionState> {
+  const admin = await requireAdmin();
   const catalog = resolveCatalog(formData);
   const id = readString(formData, "id");
   const isActive = readString(formData, "isActive") === "true";
@@ -227,6 +233,7 @@ export async function setCatalogRecordActiveAction(
         entityType: "MasterDataRecord",
         entityId: id,
         action: isActive ? "ACTIVATE" : "DEACTIVATE",
+        actorId: admin.id,
         changes: {
           catalogo: catalog,
           code: current.code,

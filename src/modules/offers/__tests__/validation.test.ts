@@ -12,9 +12,11 @@ const PROFILE_A = "profile-analista";
 const PROFILE_B = "profile-backend";
 const STATUS_SENT = "status-sent";
 const STATUS_CANCELLED = "status-cancelled";
+const STATUS_ACCEPTED = "status-accepted";
 
 const CONTEXT: OfferValidationContext = {
   cancelledStatusIds: [STATUS_CANCELLED],
+  acceptedStatusIds: [STATUS_ACCEPTED],
   professionalProfileIds: [PROFILE_A, PROFILE_B],
   hasSelectableCancellationReasons: true,
 };

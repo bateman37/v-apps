@@ -23,6 +23,12 @@ import {
   type AuthenticatedUser,
 } from "@/modules/auth/identity";
 import { requireUser } from "@/modules/auth/session";
+import {
+  ATTACHMENT_VALIDATION_MESSAGES,
+  deleteAttachmentFile,
+  saveAttachmentFile,
+  validateAttachment,
+} from "@/lib/storage";
 import { dispatchNotifications } from "@/modules/notifications/dispatch";
 import type { OfferEventSubject } from "@/modules/notifications/rules";
 import { assignOfferNumber } from "@/modules/offers/numbering";
@@ -1211,4 +1217,170 @@ export async function reviewOfferAction(
 export async function currentUserIsAdmin(): Promise<boolean> {
   const user = await requireUser();
   return isAdmin(user);
+}
+
+// ---------------------------------------------------------------------------
+// Adjuntos de oferta (bloque 6)
+// ---------------------------------------------------------------------------
+
+/**
+ * Sube un adjunto a una oferta.
+ *
+ * El fichero se escribe en disco con un nombre físico aleatorio (nunca el
+ * nombre original) antes de guardar los metadatos; si la base de datos falla
+ * después, se limpia el fichero para no dejar binarios huérfanos.
+ */
+export async function uploadOfferAttachmentAction(
+  _previousState: OfferActionState,
+  formData: FormData,
+): Promise<OfferActionState> {
+  const user = await requireUser();
+  const offerId = readString(formData, "offerId");
+  const file = formData.get("file");
+
+  if (!offerId) {
+    return actionError({ _form: "No se ha podido identificar la oferta." });
+  }
+  if (!(file instanceof File) || file.size === 0) {
+    return actionError({ file: "Selecciona un archivo." });
+  }
+
+  const validationError = validateAttachment({
+    name: file.name,
+    size: file.size,
+    type: file.type,
+  });
+  if (validationError) {
+    return actionError({ file: ATTACHMENT_VALIDATION_MESSAGES[validationError] });
+  }
+
+  const offer = await prisma.offer.findUnique({
+    where: { id: offerId },
+    select: { id: true, createdById: true, commercialId: true, projectManagerId: true },
+  });
+
+  if (!offer || !canAccessOffer(user, offer)) {
+    return actionError({ _form: "La oferta ya no está disponible." });
+  }
+
+  let storageKey: string | null = null;
+  try {
+    const buffer = Buffer.from(await file.arrayBuffer());
+    storageKey = await saveAttachmentFile(file.name, buffer);
+
+    await prisma.$transaction(async (tx) => {
+      const attachment = await tx.offerAttachment.create({
+        data: {
+          offerId,
+          originalName: file.name.slice(0, 255),
+          storageKey: storageKey!,
+          contentType: file.type || "application/octet-stream",
+          sizeBytes: file.size,
+          uploadedById: user.id,
+        },
+        select: { id: true },
+      });
+
+      await recordAudit(tx, {
+        entityType: "OfferAttachment",
+        entityId: attachment.id,
+        action: "ATTACHMENT_ADDED",
+        actorId: user.id,
+        changes: { oferta: offerId, nombre: file.name, tamano: file.size },
+      });
+
+      const subject = await loadEventSubject(tx, offerId);
+      await dispatchNotifications(tx, {
+        trigger: "OFFER_ATTACHMENT_ADDED",
+        offer: subject,
+        actorUserId: user.id,
+        eventId: `attachment:${attachment.id}`,
+        detail: `${user.personName} ha adjuntado «${file.name}».`,
+      });
+    });
+  } catch (error) {
+    // La base de datos falló después de escribir el fichero: se limpia para
+    // no dejar un binario huérfano sin metadatos que lo referencien.
+    if (storageKey) {
+      await deleteAttachmentFile(storageKey);
+    }
+    return actionError({ _form: toSafeErrorMessage(error) });
+  }
+
+  revalidatePath(`/offers/${offerId}`);
+  return actionSuccess(`Archivo «${file.name}» adjuntado.`);
+}
+
+/**
+ * Retira lógicamente un adjunto. Solo su autor o un administrador pueden
+ * hacerlo. No se purga el binario: queda registrado como retirado y deja de
+ * poder descargarse.
+ */
+export async function removeOfferAttachmentAction(
+  _previousState: OfferActionState,
+  formData: FormData,
+): Promise<OfferActionState> {
+  const user = await requireUser();
+  const offerId = readString(formData, "offerId");
+  const attachmentId = readString(formData, "attachmentId");
+
+  if (!offerId || !attachmentId) {
+    return actionError({ _form: "No se ha podido identificar el adjunto." });
+  }
+
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      const offer = await tx.offer.findUnique({
+        where: { id: offerId },
+        select: { id: true, createdById: true, commercialId: true, projectManagerId: true },
+      });
+      if (!offer || !canAccessOffer(user, offer)) {
+        return null;
+      }
+
+      const attachment = await tx.offerAttachment.findUnique({
+        where: { id: attachmentId },
+        select: { id: true, offerId: true, originalName: true, uploadedById: true, removedAt: true },
+      });
+      if (!attachment || attachment.offerId !== offerId) {
+        return null;
+      }
+      if (attachment.removedAt !== null) {
+        return { alreadyRemoved: true as const };
+      }
+      if (attachment.uploadedById !== user.id && !isAdmin(user)) {
+        return { forbidden: true as const };
+      }
+
+      await tx.offerAttachment.update({
+        where: { id: attachmentId },
+        data: { removedAt: new Date(), removedById: user.id },
+      });
+
+      await recordAudit(tx, {
+        entityType: "OfferAttachment",
+        entityId: attachmentId,
+        action: "ATTACHMENT_REMOVED",
+        actorId: user.id,
+        changes: { oferta: offerId, nombre: attachment.originalName },
+      });
+
+      return { removed: true as const };
+    });
+
+    if (result === null) {
+      return actionError({ _form: "El adjunto ya no está disponible." });
+    }
+    if ("forbidden" in result) {
+      return actionError({ _form: "Solo el autor del adjunto o un administrador puede retirarlo." });
+    }
+    if ("alreadyRemoved" in result) {
+      return actionError({ _form: "El adjunto ya estaba retirado." });
+    }
+  } catch (error) {
+    return actionError({ _form: toSafeErrorMessage(error) });
+  }
+
+  revalidatePath(`/offers/${offerId}`);
+  return actionSuccess("Adjunto retirado.");
 }
