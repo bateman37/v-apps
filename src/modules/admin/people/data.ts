@@ -13,6 +13,16 @@ export type PersonRow = {
   canBeProjectManager: boolean;
   isActive: boolean;
   offerCount: number;
+  /** Acceso vinculado a esta persona (bloque 7): `null` si no tiene cuenta. */
+  access: PersonAccess | null;
+};
+
+export type PersonAccess = {
+  userId: string;
+  username: string;
+  role: "ADMIN" | "USER";
+  isActive: boolean;
+  mustChangePassword: boolean;
 };
 
 export type PersonFilters = {
@@ -72,6 +82,15 @@ export async function getPeople(filters: PersonFilters): Promise<PersonRow[]> {
       canBeProjectManager: true,
       isActive: true,
       _count: { select: { commercialOffers: true, projectManagerOffers: true } },
+      user: {
+        select: {
+          id: true,
+          username: true,
+          role: true,
+          isActive: true,
+          mustChangePassword: true,
+        },
+      },
     },
     orderBy: { name: "asc" },
   });
@@ -83,5 +102,14 @@ export async function getPeople(filters: PersonFilters): Promise<PersonRow[]> {
     canBeProjectManager: person.canBeProjectManager,
     isActive: person.isActive,
     offerCount: person._count.commercialOffers + person._count.projectManagerOffers,
+    access: person.user
+      ? {
+          userId: person.user.id,
+          username: person.user.username,
+          role: person.user.role,
+          isActive: person.user.isActive,
+          mustChangePassword: person.user.mustChangePassword,
+        }
+      : null,
   }));
 }

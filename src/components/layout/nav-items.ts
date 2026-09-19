@@ -27,12 +27,18 @@ export type NavSection = {
 
 export const NAV_SECTIONS: NavSection[] = [
   {
+    // «Panel de notificaciones» aparece antes que el Gestor de Ofertas
+    // (hotfix DEV-005, bloque 9): es la entrada principal de un usuario
+    // normal, disponible para ADMIN y USER.
+    title: "Notificaciones",
+    items: [{ label: "Panel de notificaciones", href: "/notificaciones" }],
+  },
+  {
     title: "Gestor de Ofertas",
     items: [
       { label: "Todas las ofertas", href: "/offers" },
       { label: "Nueva oferta", href: "/offers/new" },
       { label: "Pendiente de revisión", href: "/offers/pending-review" },
-      { label: "Ofertas archivadas", href: "/offers?scope=archivadas" },
     ],
   },
   {
@@ -40,9 +46,11 @@ export const NAV_SECTIONS: NavSection[] = [
     adminOnly: true,
     items: [
       { label: "Clientes", href: "/admin/clients" },
-      { label: "Personas", href: "/admin/people" },
+      // «Personas y accesos» sustituye a las antiguas entradas separadas
+      // «Personas» y «Usuarios» (hotfix DEV-005, bloque 7); `/admin/users`
+      // sigue existiendo y redirige aquí para no romper marcadores.
+      { label: "Personas y accesos", href: "/admin/people" },
       { label: "Maestros de oferta", href: "/admin/master-data" },
-      { label: "Usuarios", href: "/admin/users" },
       { label: "Reglas de notificación", href: "/admin/notification-rules" },
       { label: "Contador de ofertas", href: "/admin/counter" },
     ],
