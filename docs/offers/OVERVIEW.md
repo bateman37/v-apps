@@ -6,37 +6,44 @@ Sustituir el Excel actual, conectado a SQL Server, por un módulo web sobre Post
 
 El Excel actual contiene aproximadamente 1.254 ofertas históricas, una tabla de jornadas por perfil, maestros, generación de correos y lógica de validación.
 
-## Navegación inicial prevista
+## Navegación implementada
 
-La plataforma admite un menú lateral común (ver [`../architecture/ARCHITECTURE.md`](../architecture/ARCHITECTURE.md)). En la primera implementación funcional, el menú solo necesita mostrar:
+La plataforma tiene un menú lateral común (ver [`../architecture/ARCHITECTURE.md`](../architecture/ARCHITECTURE.md)). Desde DEV-003 muestra:
 
 - **Gestor de Ofertas**
-  - Todas las ofertas
-  - Nueva oferta
+  - Todas las ofertas (`/offers`)
+  - Nueva oferta (`/offers/new`)
 - **Administración**
-  - Maestros
-  - Usuarios y permisos, cuando se diseñen
+  - Clientes (`/admin/clients`)
+  - Personas (`/admin/people`)
+  - Maestros de oferta (`/admin/master-data`)
+
+«Usuarios y permisos» se añadirá cuando se diseñe la autenticación (`DEC-055`, `DEC-056`, ambas pendientes).
 
 El menú debe quedar preparado para incorporar otros módulos (ESM, FACT, Budget Comercial, License Manager), pero no se crean ahora páginas vacías para ellos.
 
 ## Pantalla principal de ofertas
 
-La futura pantalla principal sustituye la tabla del Excel y debe permitir:
+Implementada en `/offers` desde DEV-003, sustituyendo la tabla del Excel:
 
-- Consultar todas las ofertas.
-- Crear una nueva oferta.
-- Abrir y modificar una oferta existente.
-- Buscar y filtrar.
-- Ordenar resultados.
-- Paginar.
-- Filtrar por año, mes, cliente, comercial, PM, estado, tipo de oferta y origen.
-- Mostrar totales sobre los resultados filtrados, cuando se diseñe esa entrega.
-- Mantener eliminación lógica: el histórico nunca se elimina físicamente.
-- Incorporar exportación a Excel en una fase posterior.
+- Listado real leído de PostgreSQL, con número, fecha, cliente, descripción resumida, comercial, PM, estado, importe, total de jornadas por perfil y acceso a la oferta.
+- Formato monetario español en euros y fechas `DD/MM/AAAA`.
+- Búsqueda por número, descripción, cliente o solicitante.
+- Filtros combinables por año, mes, cliente, comercial, PM, estado, tipo de oferta y origen, con botón para limpiarlos.
+- Ordenación por número, fecha, cliente, estado e importe.
+- Paginación de 25 registros que conserva filtros y orden.
+- Todo el estado vive en parámetros de URL, de modo que una pantalla filtrada es reproducible.
+- Recuento de resultados y suma de importe y de jornadas sobre el **conjunto filtrado completo**, no solo sobre la página visible.
+- Estado vacío honesto, con acceso directo a crear la primera oferta.
+- Exclusión por defecto de los registros con `deletedAt` informado: eliminación lógica, nunca física.
+
+Pendiente para fases posteriores: exportación a Excel (`DEC-032`, `PLANIFICADO`).
 
 ## Formulario de oferta
 
-El formulario de alta y el de modificación reutilizan el mismo componente cuando se implementen. El detalle de campos está en [`FIELDS.md`](FIELDS.md).
+El alta (`/offers/new`) y la modificación (`/offers/[id]/edit`) reutilizan el mismo componente y las mismas reglas de validación. La consulta está en `/offers/[id]`, con todos los datos, el detalle de jornadas, el total calculado y el histórico de estados. El detalle de campos está en [`FIELDS.md`](FIELDS.md).
+
+En esta entrega no se expone el borrado de ofertas desde la interfaz; `deletedAt` queda preparado para la eliminación lógica aprobada (`DEC-016`).
 
 ## Documentos relacionados
 

@@ -28,4 +28,14 @@
 
 ## Trazabilidad
 
-Todo cambio de estado de una oferta debe quedar registrado en el histórico de estados (`OfferStatusHistory`, ver [`../architecture/DATA_MODEL.md`](../architecture/DATA_MODEL.md)) y sujeto a auditoría (ver [`../architecture/SECURITY.md`](../architecture/SECURITY.md)).
+Todo cambio de estado de una oferta queda registrado en el histórico de estados (`OfferStatusHistory`, ver [`../architecture/DATA_MODEL.md`](../architecture/DATA_MODEL.md)) y sujeto a auditoría (ver [`../architecture/SECURITY.md`](../architecture/SECURITY.md)).
+
+### Implementación (DEV-003)
+
+- El alta de una oferta crea el primer evento, con estado anterior `null`.
+- Una modificación crea un evento **solo si el estado cambia realmente**; si no cambia, no se duplica nada.
+- El histórico se muestra en la pantalla de consulta de la oferta, de más reciente a más antiguo.
+- `actorId` es siempre `null` mientras no exista autenticación (`DEC-019`): la atribución del cambio es desconocida y no se inventa ningún usuario.
+- **No** se ha implementado ninguna máquina de estados ni restricción de transición: cualquier estado activo puede seleccionarse, porque `DEC-051` sigue pendiente.
+- `navisionOrder` sigue siendo opcional en todos los estados, porque `DEC-052` sigue pendiente.
+- No se envía ningún correo, porque `DEC-053` sigue pendiente.

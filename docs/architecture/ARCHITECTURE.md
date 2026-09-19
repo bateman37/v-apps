@@ -45,17 +45,27 @@ src/
     layout/             Layout común: menú lateral, cabecera, aviso de entorno.
     ui/                 Componentes de presentación realmente compartidos.
   modules/
-    offers/             Código específico del Gestor de Ofertas.
-    master-data/         Acceso y presentación de los maestros.
+    offers/             Dominio y casos de uso del Gestor de Ofertas.
+    admin/              Administración de clientes y personas, y piezas comunes.
+    master-data/        Los ocho catálogos: lectura y administración.
+    audit/              Registro de auditoría compartido.
   lib/
-    db/                 Cliente Prisma y utilidades estrictamente técnicas.
+    db/                 Cliente Prisma y traducción segura de errores.
+    decimal.ts          Decimal exacto (parseo y suma con BigInt).
+    format.ts           Serialización y formato español de fechas e importes.
+    validation.ts       Primitivas de validación compartidas (zod).
+    text.ts             Normalización de nombres y códigos.
 prisma/
   schema.prisma         Modelo de datos.
   seed.ts / seed-data.ts Carga inicial idempotente de maestros.
   migrations/           Historial de migraciones.
 ```
 
-Componentes de servidor por defecto; solo la navegación lateral (resaltado de la sección activa) es un componente de cliente, por depender de la ruta actual del navegador.
+Componentes de servidor por defecto. Son de cliente únicamente los que tienen interacción real: la navegación lateral (necesita la ruta actual), el formulario de oferta (recalcula el total de jornadas y muestra el motivo de cancelación según el estado) y las pantallas de Administración (edición en línea, estado de envío y confirmación de desactivación).
+
+Las mutaciones se hacen con **Server Actions**; no existe ninguna API REST paralela. Las operaciones críticas —alta y modificación de ofertas con sus jornadas, histórico y auditoría, y cualquier cambio de maestro con su auditoría— se ejecutan dentro de una transacción de Prisma.
+
+La única dependencia añadida en DEV-003 es `zod`, como motor de validación compartido entre alta y edición. No se ha añadido ninguna librería de formularios ni de componentes.
 
 ## Fuera de alcance en esta entrega
 
@@ -63,4 +73,8 @@ No se define todavía, por no estar decidido:
 
 - Proveedor o mecanismo definitivo de autenticación. Ver la decisión temporal de posponerla en [`../decisions/DECISIONS.md`](../decisions/DECISIONS.md) (`DEC-019`, `DEC-056`).
 - Infraestructura y estrategia de despliegue (ver [`../decisions/DECISIONS.md`](../decisions/DECISIONS.md)).
-- El modelo de datos transaccional (`Offer`, `Client`, `Person` y el resto de entidades descritas en [`DATA_MODEL.md`](DATA_MODEL.md)), que corresponde a entregas posteriores.
+- El modelo de datos de importación (`ImportBatch`, `ImportIssue`) y de identidad (`User`, `Role`), descritos en [`DATA_MODEL.md`](DATA_MODEL.md), que corresponden a entregas posteriores.
+
+## Identidad visual
+
+Los tokens de color, la tipografía y los requisitos de accesibilidad de la interfaz están documentados en [`../design/BRAND_UI.md`](../design/BRAND_UI.md).

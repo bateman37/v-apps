@@ -2,13 +2,15 @@
 
 Fases de alto nivel del proyecto. No se incluyen fechas ni compromisos de calendario, que no han sido definidos. El orden refleja la secuencia funcional prevista, no un compromiso cerrado.
 
-## Fase 0 — Cimentación documental (esta entrega)
+## Fase 0 — Cimentación documental (completada)
 
 Visión, alcance, arquitectura inicial, modelo conceptual, seguridad, maestros compartidos y especificación funcional conocida del Gestor de Ofertas. Sin código de aplicación. Ver [`../PROJECT_STATUS.md`](../PROJECT_STATUS.md).
 
-## Fase 1 — Gestor de Ofertas
+## Fase 1 — Gestor de Ofertas (en curso)
 
-Diseño e implementación del primer módulo funcional: alta, consulta y modificación de ofertas; numeración global; formulario con campos obligatorios y opcionales; maestros asociados; jornadas por perfil; migración piloto de un mes cerrado desde el histórico. Especificación conocida en [`../offers/`](../offers/OVERVIEW.md).
+Diseño e implementación del primer módulo funcional: alta, consulta y modificación de ofertas; numeración global; formulario con campos obligatorios y opcionales; maestros asociados; jornadas por perfil; migración piloto de un mes cerrado desde el histórico. Especificación en [`../offers/`](../offers/OVERVIEW.md).
+
+Estado: DEV-002 entregó la base técnica y DEV-003 el primer flujo operativo (administración de maestros, alta, listado, consulta y modificación de ofertas, numeración global e identidad visual). Quedan dentro de esta fase, sin encargo todavía, la autenticación y el piloto de migración. Ver [`../PROJECT_STATUS.md`](../PROJECT_STATUS.md).
 
 ## Fase 2 — Migración completa del histórico de ofertas
 

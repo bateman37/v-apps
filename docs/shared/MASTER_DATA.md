@@ -28,12 +28,29 @@ Los valores concretos, obligatoriedad y reglas de uso de cada uno de estos maest
 - **Implantaciones**: en la primera versión del Gestor de Ofertas no existe como maestro; el campo `Implantación` es texto libre en la oferta. Su futura relación muchos a muchos con clientes está pendiente de diseño (ver [`../decisions/DECISIONS.md`](../decisions/DECISIONS.md)).
 - **Tarifas**: se diseñarán cuando corresponda a ESM y a Administración común, fuera del alcance de esta entrega.
 
-## Administración de maestros
+## Administración de maestros (implementada en DEV-003)
 
-La gestión de estos maestros (alta, edición, activación/desactivación) corresponde al módulo de Administración común descrito en [`../product/VISION.md`](../product/VISION.md). Su diseño detallado —pantallas, permisos concretos— no forma parte de esta entrega.
+| Pantalla | Qué permite |
+|---|---|
+| `/admin/clients` | Crear un cliente, editar su nombre y activarlo o desactivarlo. Búsqueda por nombre y filtro por activo/inactivo. |
+| `/admin/people` | Crear una persona, editar su nombre y sus dos habilitaciones, y activarla o desactivarla. Búsqueda por nombre y filtros por habilitación comercial, habilitación PM y estado. |
+| `/admin/master-data` | Crear, editar y activar o desactivar registros de los ocho catálogos. |
 
-## Implementación de esta entrega (DEV-002)
+Reglas comunes aplicadas en las tres pantallas:
+
+- **Nunca hay borrado físico** (`DEC-017`). Un registro usado por ofertas solo se desactiva.
+- Un registro inactivo deja de ofrecerse al crear datos nuevos, pero **sigue visible** en los datos históricos que lo referencian y en la edición de una oferta que ya lo usa.
+- La desactivación pide confirmación explícita y explica que no se borra el histórico.
+- En los catálogos, el `code` es obligatorio, único y estable: se fija en el alta y **no se modifica nunca desde la interfaz**, para no romper referencias. `name`, `sortOrder` e `isActive` sí son editables. Los códigos nuevos se normalizan de forma predecible (mayúsculas, espacios a `_`) y se validan contra el patrón `A-Z 0-9 _ -`; los códigos ya aprobados no se renombran.
+- Los clientes evitan duplicados exactos de nombre tras normalizar espacios, mediante una restricción única de PostgreSQL sobre una columna normalizada (ver [`../architecture/DATA_MODEL.md`](../architecture/DATA_MODEL.md)).
+- Todas las operaciones quedan auditadas (ver [`../architecture/SECURITY.md`](../architecture/SECURITY.md)).
+
+**Limitación vigente**: estas pantallas no tienen ninguna restricción real a administradores, porque todavía no hay autenticación (`DEC-019`). Solo deben usarse en local. Los permisos concretos dependen de `DEC-055` y `DEC-056`, ambas pendientes.
+
+## Valores iniciales cargados (DEV-002)
 
 Prioridades, orígenes, tipos de oferta, estados de oferta, segmentaciones y perfiles profesionales están cargados en PostgreSQL con sus valores aprobados, mediante una carga inicial idempotente (`prisma/seed.ts`). Idiomas y motivos de cancelación existen como tablas vacías, sin valores todavía aprobados.
+
+Idiomas y motivos de cancelación siguen deliberadamente vacíos en una instalación nueva: el usuario los crea desde `/admin/master-data` cuando los necesite. La carga inicial no inventa ningún valor.
 
 Cada registro tiene un identificador interno, un `code` técnico estable y único (independiente del nombre visible, para poder cambiar la etiqueta sin romper referencias), un `name` visible en español, un estado activo y un orden de visualización. El mapeo código–nombre completo, único lugar donde se documenta para evitar duplicarlo, está en `prisma/seed-data.ts`. Los perfiles profesionales reutilizan literalmente sus códigos funcionales ya conocidos (PM, AN, DIL, DE, IN, DI, PR-BE, PR-FE, PR-REM, KN, IT, UX, TL, PLATF); el resto de catálogos usa códigos técnicos legibles en inglés (por ejemplo `HIGH`, `COMMERCIAL`, `PROJECT`), que son identificadores internos y no nuevas reglas de negocio.
