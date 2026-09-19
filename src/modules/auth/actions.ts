@@ -5,11 +5,7 @@ import { prisma } from "@/lib/db/prisma";
 import { toSafeErrorMessage } from "@/lib/db/errors";
 import { readString } from "@/lib/validation";
 import { recordAudit } from "@/modules/audit/audit";
-import {
-  authError,
-  INITIAL_AUTH_FORM_STATE,
-  type AuthFormState,
-} from "@/modules/auth/action-state";
+import { authError, type AuthFormState } from "@/modules/auth/action-state";
 import {
   MAX_USERNAME_LENGTH,
   normalizeUsername,
@@ -200,10 +196,11 @@ export async function changeOwnPasswordAction(
     return authError({ _form: toSafeErrorMessage(error) });
   }
 
-  return {
-    ...INITIAL_AUTH_FORM_STATE,
-    status: "success",
-    message:
-      "Contraseña actualizada. Se han cerrado las demás sesiones abiertas de tu cuenta.",
-  };
+  // Se redirige en lugar de devolver el estado en línea: `revokeAllSessionsOf`
+  // + `createSession` cambian la cookie de sesión dentro de esta misma
+  // Server Action, y solo una respuesta de redirección garantiza que el
+  // navegador aplique esa cookie nueva antes de la siguiente petición. Sin
+  // el redirect, la petición siguiente podía llegar todavía con la cookie
+  // antigua (ya revocada) y forzar un reinicio de sesión no deseado.
+  redirect("/cuenta/contrasena?motivo=actualizada");
 }

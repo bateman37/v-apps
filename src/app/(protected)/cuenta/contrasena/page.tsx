@@ -1,3 +1,4 @@
+import { Alert } from "@/components/ui/alert";
 import { ChangePasswordForm } from "@/modules/auth/change-password-form";
 import { requireUser } from "@/modules/auth/session";
 
@@ -9,6 +10,7 @@ export default async function ChangePasswordPage({
   const user = await requireUser();
   const params = await searchParams;
   const isInitial = params.motivo === "inicial";
+  const justUpdated = params.motivo === "actualizada";
 
   return (
     <div className="mx-auto max-w-md">
@@ -20,6 +22,11 @@ export default async function ChangePasswordPage({
           ? `Es tu primer acceso, ${user.personName}: debes establecer una contraseña propia antes de continuar.`
           : "Cambia tu contraseña cuando quieras. Se cerrarán las demás sesiones abiertas de tu cuenta."}
       </p>
+      {justUpdated ? (
+        <Alert tone="success" title="Contraseña actualizada">
+          Se han cerrado las demás sesiones abiertas de tu cuenta.
+        </Alert>
+      ) : null}
       <div className="v-card px-6 py-6">
         <ChangePasswordForm />
       </div>
