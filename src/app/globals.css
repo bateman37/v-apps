@@ -1,40 +1,293 @@
 @import "tailwindcss";
 
+/*
+ * Sistema visual de Vincle Apps.
+ *
+ * Los colores oficiales de marca y las reglas de proporción (el mostaza es
+ * un acento de ~10 %, nunca el color dominante) están documentados en
+ * docs/design/BRAND_UI.md. Aquí solo se definen los tokens; ningún
+ * componente debe escribir un color literal.
+ */
+
 :root {
-  --color-bg: #f5f6f8;
+  /* --- Colores oficiales del Brand Manual de Vincle (mayo 2024) --- */
+  --brand-blue: #1f18c0; /* Azul corporativo principal */
+  --brand-black: #000000; /* Negro corporativo */
+  --brand-mustard: #dbba12; /* Mostaza secundario (acento) */
+
+  /* --- Neutros derivados para interfaz (no son colores de marca) --- */
+  --color-bg: #f6f6f9;
   --color-surface: #ffffff;
-  --color-border: #dfe3e8;
-  --color-text: #1a2233;
-  --color-text-muted: #5b6472;
-  --color-primary: #1f3a5f;
-  --color-primary-dark: #14273f;
+  --color-surface-muted: #f1f1f5;
+  --color-border: #dcdce4;
+  --color-border-strong: #b5b5c2;
+  --color-text: #0b0b12; /* Casi negro, derivado del negro corporativo */
+  --color-text-muted: #55555f;
+  --color-text-inverse: #ffffff;
+
+  /* --- Tokens semánticos de marca --- */
+  --color-primary: var(--brand-blue);
+  --color-primary-hover: #1811a0;
+  --color-primary-active: #140e85;
   --color-primary-contrast: #ffffff;
-  --color-accent: #2f6fed;
-  --color-danger: #b3261e;
-  --color-success: #1a7f4e;
-  --color-warning: #8a5a00;
-  --color-warning-bg: #fdf3d9;
-  --color-focus-ring: #2f6fed;
+  --color-primary-soft: #ecebfb; /* Fondo suave para estados activos */
+  --color-focus-ring: var(--brand-blue);
+
+  /* Acento mostaza. `--color-accent` es solo para superficies pequeñas;
+     `--color-accent-text` es la variante oscurecida que sí cumple contraste
+     AA como texto sobre blanco. */
+  --color-accent: var(--brand-mustard);
+  --color-accent-soft: #fbf4d6;
+  --color-accent-text: #6b5a00;
+
+  /* --- Colores funcionales de interfaz (no oficiales, ver BRAND_UI.md) --- */
+  --color-success: #12663f;
+  --color-success-soft: #e3f3ea;
+  --color-warning: #7a4f00;
+  --color-warning-soft: #fbf0d8;
+  --color-danger: #a4131a;
+  --color-danger-soft: #fbe9e9;
+
+  /* Gilroy es la tipografía oficial de Vincle, pero el repositorio no
+     incluye archivos de fuente licenciados: se usa si está instalada
+     localmente y, si no, la alternativa web ya presente en el proyecto.
+     Ver docs/design/BRAND_UI.md. */
+  --font-app-sans: "Gilroy", var(--font-geist-sans), "Segoe UI", Arial,
+    Helvetica, sans-serif;
 }
 
 @theme inline {
   --color-background: var(--color-bg);
   --color-foreground: var(--color-text);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-app-sans);
   --font-mono: var(--font-geist-mono);
 }
 
 body {
   background: var(--color-bg);
   color: var(--color-text);
-  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+  font-family: var(--font-app-sans);
+}
+
+/* Titulares con peso equivalente a Gilroy Black; cuerpo Regular/Semibold. */
+h1,
+h2,
+h3 {
+  color: var(--color-text);
+  letter-spacing: -0.01em;
+}
+
+h1 {
+  font-weight: 800;
+}
+
+h2,
+h3 {
+  font-weight: 600;
 }
 
 /* Foco visible y consistente para navegación por teclado. */
 a:focus-visible,
 button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
 [tabindex]:focus-visible {
   outline: 2px solid var(--color-focus-ring);
   outline-offset: 2px;
   border-radius: 4px;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Capa mínima de componentes compartidos.                                  */
+/* Evita repetir cadenas largas de utilidades y garantiza que botones,      */
+/* campos y tablas se comporten igual en toda la aplicación.                */
+/* ---------------------------------------------------------------------- */
+
+.v-link {
+  color: var(--color-primary);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.v-link:hover {
+  color: var(--color-primary-hover);
+}
+
+.v-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 0.375rem;
+  border: 1px solid transparent;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.25rem;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease;
+}
+
+.v-btn:disabled,
+.v-btn[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.v-btn-primary {
+  background-color: var(--color-primary);
+  color: var(--color-primary-contrast);
+}
+
+.v-btn-primary:hover:not(:disabled) {
+  background-color: var(--color-primary-hover);
+}
+
+.v-btn-primary:active:not(:disabled) {
+  background-color: var(--color-primary-active);
+}
+
+.v-btn-secondary {
+  background-color: var(--color-surface);
+  border-color: var(--color-border-strong);
+  color: var(--color-text);
+}
+
+.v-btn-secondary:hover:not(:disabled) {
+  background-color: var(--color-surface-muted);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.v-btn-quiet {
+  background-color: transparent;
+  color: var(--color-primary);
+  padding-inline: 0.5rem;
+}
+
+.v-btn-quiet:hover:not(:disabled) {
+  background-color: var(--color-primary-soft);
+}
+
+.v-label {
+  display: block;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: 0.25rem;
+}
+
+.v-hint {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  margin-top: 0.25rem;
+}
+
+.v-field-error {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-danger);
+  margin-top: 0.25rem;
+}
+
+/* El prefijo textual "Error:" evita depender únicamente del color. */
+.v-field-error::before {
+  content: "Error: ";
+}
+
+.v-input {
+  width: 100%;
+  border-radius: 0.375rem;
+  border: 1px solid var(--color-border-strong);
+  background-color: var(--color-surface);
+  padding: 0.5rem 0.625rem;
+  font-size: 0.875rem;
+  color: var(--color-text);
+}
+
+.v-input::placeholder {
+  color: var(--color-text-muted);
+}
+
+.v-input:disabled {
+  background-color: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  cursor: not-allowed;
+}
+
+.v-input[aria-invalid="true"] {
+  border-color: var(--color-danger);
+  border-width: 2px;
+}
+
+.v-card {
+  border: 1px solid var(--color-border);
+  border-radius: 0.5rem;
+  background-color: var(--color-surface);
+}
+
+.v-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid var(--color-border);
+  padding: 0.75rem 1rem;
+}
+
+.v-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 0.875rem;
+}
+
+.v-table thead tr {
+  border-bottom: 1px solid var(--color-border);
+  background-color: var(--color-surface-muted);
+}
+
+.v-table th {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.v-table td {
+  padding: 0.625rem 0.75rem;
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: top;
+}
+
+.v-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.v-table tbody tr:hover {
+  background-color: var(--color-primary-soft);
+}
+
+.v-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 9999px;
+  padding: 0.125rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+
+.v-num {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
