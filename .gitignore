@@ -38,6 +38,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# local agent worktrees (isolated checkouts used by concurrent Claude Code sessions)
+/.claude/worktrees/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
