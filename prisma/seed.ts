@@ -8,6 +8,7 @@
  * insertarse de nuevo.
  */
 import { PrismaClient } from "@prisma/client";
+import { OFFER_NUMBER_COUNTER_KEY } from "../src/modules/offers/numbering";
 import {
   CANCELLATION_REASONS,
   LANGUAGES,
@@ -42,6 +43,27 @@ async function upsertOrderedValues(
   console.log(`  - ${label}: ${values.length} registro(s) verificados.`);
 }
 
+/**
+ * Crea el contador técnico de numeración de ofertas con valor inicial 0
+ * únicamente si todavía no existe.
+ *
+ * `update: {}` es deliberado: volver a ejecutar el seed nunca puede rebajar,
+ * reiniciar ni sobrescribir un contador ya en uso. La inicialización con el
+ * último contador del Excel legado, en el corte definitivo, sigue pendiente y
+ * no se hace desde aquí (ver docs/offers/BUSINESS_RULES.md).
+ */
+async function ensureOfferNumberCounter() {
+  const counter = await prisma.systemCounter.upsert({
+    where: { key: OFFER_NUMBER_COUNTER_KEY },
+    create: { key: OFFER_NUMBER_COUNTER_KEY, value: 0 },
+    update: {},
+    select: { value: true },
+  });
+  console.log(
+    `  - Contador de numeración de ofertas: valor actual ${counter.value} (no se reinicia).`,
+  );
+}
+
 async function main() {
   console.log("Cargando maestros de referencia (idempotente)...");
 
@@ -73,6 +95,8 @@ async function main() {
     CANCELLATION_REASONS,
     (args) => prisma.cancellationReason.upsert(args),
   );
+
+  await ensureOfferNumberCounter();
 
   console.log("Carga de maestros completada.");
 }
