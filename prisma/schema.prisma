@@ -1,0 +1,126 @@
+// Esquema Prisma — Vincle Apps
+//
+// Esta entrega (DEV-002) implementa únicamente los maestros de referencia
+// necesarios para preparar el Gestor de Ofertas. No incluye todavía `Offer`,
+// `Client`, `Person` ni ninguna otra entidad transaccional: ver
+// docs/architecture/DATA_MODEL.md para el estado conceptual completo y
+// docs/decisions/DECISIONS.md para las decisiones que enmarcan este alcance.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Maestro de prioridades de oferta (Alta, Media, Baja).
+model Priority {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String
+  isActive  Boolean  @default(true) @map("is_active")
+  sortOrder Int      @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("priorities")
+}
+
+/// Maestro de orígenes de oferta (Comercial, PM, CS).
+model Origin {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String
+  isActive  Boolean  @default(true) @map("is_active")
+  sortOrder Int      @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("origins")
+}
+
+/// Maestro de tipos de oferta (Bolsa de horas, Cambio de alcance, Proyecto).
+model OfferType {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String
+  isActive  Boolean  @default(true) @map("is_active")
+  sortOrder Int      @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("offer_types")
+}
+
+/// Maestro de estados de oferta. El flujo y las transiciones entre estados
+/// son una decisión pendiente (ver docs/decisions/DECISIONS.md, DEC-051) y no
+/// se implementan en esta entrega.
+model OfferStatus {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String
+  isActive  Boolean  @default(true) @map("is_active")
+  sortOrder Int      @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("offer_statuses")
+}
+
+/// Maestro de segmentaciones de oferta.
+model Segmentation {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String
+  isActive  Boolean  @default(true) @map("is_active")
+  sortOrder Int      @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("segmentations")
+}
+
+/// Maestro de perfiles profesionales usados en las jornadas de una oferta.
+/// Los códigos son funcionales y conocidos (ver docs/offers/BUSINESS_RULES.md)
+/// y no deben modificarse sin una decisión explícita.
+model ProfessionalProfile {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String
+  isActive  Boolean  @default(true) @map("is_active")
+  sortOrder Int      @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("professional_profiles")
+}
+
+/// Maestro de idiomas de oferta. Todavía sin valores aprobados
+/// (ver docs/shared/MASTER_DATA.md): la tabla existe vacía en esta entrega.
+model Language {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String
+  isActive  Boolean  @default(true) @map("is_active")
+  sortOrder Int      @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("languages")
+}
+
+/// Maestro de motivos de cancelación de oferta. Todavía sin valores aprobados
+/// (ver docs/shared/MASTER_DATA.md): la tabla existe vacía en esta entrega.
+model CancellationReason {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String
+  isActive  Boolean  @default(true) @map("is_active")
+  sortOrder Int      @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("cancellation_reasons")
+}

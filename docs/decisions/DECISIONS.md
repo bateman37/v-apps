@@ -33,6 +33,12 @@ Este documento es la fuente canónica del estado de cada decisión relevante del
 | DEC-017 | Los maestros se desactivan, no se eliminan físicamente, cuando dejan de usarse | [`../shared/MASTER_DATA.md`](../shared/MASTER_DATA.md) |
 | DEC-018 | Migración en dos etapas: piloto de un mes cerrado y migración completa posterior desde SQL Server | [`../offers/MIGRATION.md`](../offers/MIGRATION.md) |
 
+## Decisiones técnicas temporales — APROBADO
+
+| ID | Decisión | Referencia |
+|---|---|---|
+| DEC-019 | Autenticación pospuesta: la aplicación solo es apta para desarrollo local, sin login, usuarios, sesiones ni roles, hasta que se implemente un mecanismo definitivo (ver DEC-056, todavía `PENDIENTE`). La interfaz muestra de forma visible `Entorno local · autenticación pendiente`, y no debe exponerse en una red accesible ni usarse en producción mientras esta decisión siga vigente. | [`../architecture/SECURITY.md`](../architecture/SECURITY.md), [`../../README.md`](../../README.md) |
+
 ## Decisiones planificadas — PLANIFICADO
 
 | ID | Decisión | Referencia |

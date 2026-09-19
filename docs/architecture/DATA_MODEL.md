@@ -1,6 +1,10 @@
 # Modelo de datos conceptual
 
-Este documento describe las entidades conceptuales necesarias para el Gestor de Ofertas y sus responsabilidades y relaciones principales. **No define migraciones, tipos SQL, índices ni nombres físicos definitivos.** Esa concreción corresponde a la entrega de implementación.
+Este documento describe las entidades conceptuales necesarias para el Gestor de Ofertas y sus responsabilidades y relaciones principales.
+
+## Estado de implementación
+
+La entrega de base técnica del Gestor de Ofertas (DEV-002) ha implementado en PostgreSQL, mediante Prisma (ver `prisma/schema.prisma`), únicamente los **maestros de referencia** listados más abajo: `Priority`, `Origin`, `OfferType`, `OfferStatus`, `Segmentation`, `ProfessionalProfile`, `Language` y `CancellationReason`. Todas las demás entidades descritas en este documento (`Offer`, `Client`, `Person`, `OfferProfileDays`, `OfferStatusHistory`, `SystemCounter`, `AuditLog`, `ImportBatch`, `ImportIssue`, `User`, `Role`) siguen siendo **conceptuales**: no tienen todavía tabla, migración ni código asociado. Su concreción (tipos SQL, índices, nombres físicos definitivos) corresponde a entregas posteriores.
 
 ## Principios
 
