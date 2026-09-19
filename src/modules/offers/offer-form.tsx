@@ -86,7 +86,6 @@ function initialValuesFrom(offer?: OfferDetail): OfferFormValues {
     offerTypeId: offer.offerTypeId,
     segmentationId: offer.segmentationId ?? "",
     requesterName: offer.requesterName,
-    languageId: offer.languageId ?? "",
     notes: offer.notes ?? "",
     estimatedCommercialDeliveryDate: offer.estimatedCommercialDeliveryDate ?? "",
     estimatedClientDeliveryDate: offer.estimatedClientDeliveryDate ?? "",
@@ -339,27 +338,12 @@ export function OfferForm({ mode, action, options, offer }: OfferFormProps) {
               onChange={(value) => setValue("requesterName", value)}
               error={errors.requesterName}
             />
-            <SelectField
-              id="languageId"
-              label="Idioma"
-              options={options.languages}
-              value={values.languageId}
-              onChange={(value) => setValue("languageId", value)}
-              error={errors.languageId}
-              emptyLabel="Sin idioma"
-              emptyHint={
-                options.languages.length === 0
-                  ? "Todavía no hay idiomas dados de alta en Administración > Maestros de oferta."
-                  : undefined
-              }
-            />
           </Grid>
 
           <FormField
             id="notes"
             label="Observaciones"
             error={errors.notes}
-            hint="Dato funcional de la oferta, versionado con ella. Para anotaciones con autor y fecha, usa el historial de comentarios de la ficha."
           >
             <textarea
               id="notes"
@@ -368,7 +352,7 @@ export function OfferForm({ mode, action, options, offer }: OfferFormProps) {
               className="v-input"
               value={values.notes}
               onChange={(event) => setValue("notes", event.target.value)}
-              {...fieldAria("notes", errors.notes, true)}
+              {...fieldAria("notes", errors.notes)}
             />
           </FormField>
         </div>

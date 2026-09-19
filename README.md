@@ -4,17 +4,18 @@ Vincle Apps es una plataforma web interna, todavía en fase inicial, que sustitu
 
 ## Estado actual
 
-Esta entrega (DEV-004) cierra funcionalmente el primer módulo, el Gestor de Ofertas, sobre la base operativa de DEV-003:
+Esta entrega (DEV-005) es un hotfix funcional de usabilidad sobre el cierre del Gestor de Ofertas (DEV-004):
 
-- **Autenticación local provisional**: login con usuario y contraseña, cambio de contraseña obligatorio en el primer acceso, cierre de sesión, y administración de usuarios (`/admin/users`) vinculados al maestro común de personas. Roles `ADMIN` y `USER`, con permisos comprobados en servidor en cada pantalla y cada acción.
-- **Código de cliente** obligatorio y único en `/admin/clients`, con aviso «Código pendiente» para los clientes heredados de DEV-003.
-- **Auditoría atribuible y versiones inmutables** de cada oferta, con comparación de campos y jornadas entre versiones.
-- **Comentarios internos** y **adjuntos** (hasta 25 MB, formatos cerrados) en la ficha de cada oferta, con descarga autenticada.
-- **Archivo lógico y recuperación** de ofertas (`/offers?scope=archivadas`), sin borrado físico.
-- **Bandeja «Pendiente de revisión»** derivada del estado y la asignación, con regla de flujo de estados y pedido de Navision obligatorio en `Aceptado`.
-- **Centro de notificaciones internas** y administración de reglas de notificación (`/admin/notification-rules`), al estilo de un disparador. El canal «Interna + email» no envía todavía ningún correo real.
-- **Exportación a Excel** del listado, con los mismos filtros y permisos, en tres hojas (`Ofertas`, `Jornadas`, `Historial`).
-- **Administración protegida del contador** de numeración (`/admin/counter`), solo para `ADMIN`.
+- **Selectores de cliente** (ofertas, filtros, reglas de notificación): muestran únicamente el nombre; el código sigue existiendo y siendo obligatorio en `/admin/clients` y en la exportación.
+- **`Idioma` retirado** de toda la experiencia funcional (formulario, ficha, Administración, filtros, exportación); la persistencia antigua queda deprecada por compatibilidad.
+- **Adjuntos corregidos**: se puede adjuntar y descargar un archivo sin el error de React (`encType`) ni `Failed to fetch`, con el límite funcional de 25 MB intacto.
+- **Sin archivo lógico de ofertas**: no existen «Archivar»/«Recuperar» ni «Ofertas archivadas»; toda oferta, incluida `Anulado`, es siempre localizable.
+- **Filtros del listado**: rango de fechas `Desde`/`Hasta` y selección múltiple de estados, persistentes en la URL, la paginación, la ordenación y la exportación.
+- **«Personas y accesos»** (`/admin/people`): una sola pantalla para el maestro de personas y sus cuentas de acceso, que siguen siendo entidades separadas; `/admin/users` redirige aquí.
+- **Reglas de notificación**: cada bloque de condiciones o destinatarios empieza con una sola fila y añade la siguiente progresivamente, hasta un máximo de cuatro.
+- **Panel de notificaciones** como entrada principal: aparece antes que el Gestor de Ofertas en el menú, y un usuario `USER` aterriza ahí tras iniciar sesión; un `ADMIN` conserva `/offers`.
+
+Se mantiene todo lo ya cerrado en DEV-004: autenticación local provisional (login, cambio de contraseña obligatorio, roles `ADMIN`/`USER`), auditoría atribuible y versiones inmutables de cada oferta, comentarios internos, bandeja «Pendiente de revisión», centro de notificaciones internas, exportación a Excel en tres hojas (`Ofertas`, `Jornadas`, `Historial`) y administración protegida del contador de numeración (`/admin/counter`).
 
 > ⚠️ **Aplicación únicamente apta para desarrollo local.** La autenticación es local y provisional (decisión temporal aprobada, ver [`docs/decisions/DECISIONS.md`](docs/decisions/DECISIONS.md)): no hay SSO, no hay email real, y no debe exponerse en una red accesible ni usarse con datos reales de clientes o empleados.
 
@@ -163,7 +164,7 @@ Guía numerada para el Product Owner. Continúa después de la guía de arranque
 
 ### 0. Comprobar que el acceso anónimo está bloqueado
 
-Cierra sesión (botón **Cerrar sesión**, arriba a la derecha) y visita directamente `http://localhost:3000/offers` o `http://localhost:3000/admin/users` sin haber iniciado sesión.
+Cierra sesión (botón **Cerrar sesión**, arriba a la derecha) y visita directamente `http://localhost:3000/offers` o `http://localhost:3000/admin/people` sin haber iniciado sesión.
 
 > **Resultado esperado**: en ambos casos se te lleva a `/login` con el aviso `Tu sesión ha caducado o no es válida`. Vuelve a iniciar sesión antes de continuar.
 
@@ -175,7 +176,7 @@ Entra en **Administración > Clientes**. Escribe un código (por ejemplo, `CLI00
 
 ### 2. Crear una persona habilitada como comercial
 
-Entra en **Administración > Personas**. Escribe un nombre inventado (por ejemplo, `Comercial de prueba`), marca la casilla **Comercial** y pulsa **Crear persona**.
+Entra en **Administración > Personas y accesos**. Escribe un nombre inventado (por ejemplo, `Comercial de prueba`), marca la casilla **Comercial** y pulsa **Crear persona**.
 
 > **Resultado esperado**: la persona aparece en la tabla con la casilla `Comercial` marcada y la casilla `PM` sin marcar.
 
@@ -193,7 +194,7 @@ Entra en **Administración > Maestros de oferta** y baja hasta **Motivos de canc
 
 ### 5. Crear una oferta con importe `0,00 €` y sin jornadas
 
-Pulsa **Nueva oferta** en el menú lateral. Fíjate en que, arriba, el número indica **«Se asignará al guardar»**. Rellena los campos marcados con asterisco: cliente, prioridad, origen, comercial, Project Manager, fecha de la oferta, descripción, tipo de oferta, nombre del solicitante, estado, y escribe `0` en **Importe total**. No escribas ninguna jornada. Pulsa **Guardar oferta**.
+Pulsa **Nueva oferta** en el menú lateral. Fíjate en que, arriba, el número indica **«Se asignará al guardar»**, y en que el desplegable de cliente muestra únicamente el nombre (por ejemplo, `EXTERNALIA`, nunca `124 · EXTERNALIA`; el código sigue existiendo en Administración > Clientes). Rellena los campos marcados con asterisco: cliente, prioridad, origen, comercial, Project Manager, fecha de la oferta, descripción, tipo de oferta, nombre del solicitante, estado, y escribe `0` en **Importe total**. No escribas ninguna jornada. Fíjate también en que ya no aparece el campo `Idioma` ni el texto de ayuda bajo `Observaciones`. Pulsa **Guardar oferta**.
 
 > **Resultado esperado**: la aplicación te lleva a la ficha de la oferta y muestra un aviso verde con el número asignado, por ejemplo `VI202609-00001`. El importe se muestra como `0,00 €` y la sección de jornadas dice que la oferta no tiene jornadas informadas. Si en lugar de `0` escribes `-5`, el guardado se rechaza con el mensaje `El importe total no puede ser negativo.` junto al campo; si dejas el importe vacío, se rechaza igualmente.
 
@@ -209,11 +210,17 @@ Mira los números de las dos ofertas que has creado.
 
 > **Resultado esperado**: son consecutivos, por ejemplo `VI202609-00001` y `VI202609-00002`. El año y el mes corresponden al momento en que las creaste, no a la fecha que escribiste en el formulario. Si abres el formulario de nueva oferta y lo cancelas sin guardar, **no** se consume ningún número: la siguiente oferta seguirá la numeración sin saltos.
 
-### 8. Buscar y filtrar
+### 8. Buscar y filtrar, incluida la fecha y varios estados a la vez
 
-Entra en **Todas las ofertas**. Escribe en el buscador una palabra de la descripción de una de ellas, o su número, o el nombre del cliente, y pulsa **Aplicar filtros**. Prueba después a combinar varios desplegables a la vez (por ejemplo, cliente y estado).
+Entra en **Todas las ofertas** sin ningún filtro: debes ver todas las ofertas, de cualquier fecha y en cualquier estado, incluido `Anulado`. Escribe en el buscador una palabra de la descripción de una de ellas, o su número, o el nombre del cliente, y pulsa **Aplicar filtros**. Prueba después a combinar varios filtros a la vez: rellena solo **Fecha desde**, luego solo **Fecha hasta**, y por último ambos a la vez; abre el desplegable **Estado** y marca dos o más casillas, una de ellas `Anulado`.
 
-> **Resultado esperado**: la tabla muestra solo las ofertas que cumplen **todas** las condiciones a la vez. Arriba se ve el recuento y la suma del importe y de las jornadas de todo el resultado filtrado, no solo de la página que estás viendo. La dirección del navegador refleja los filtros, así que puedes recargar o compartir esa vista. El botón **Limpiar filtros** vuelve al listado completo. Pulsando los títulos de las columnas Número, Fecha, Cliente, Estado e Importe se ordena por esa columna sin perder los filtros.
+> **Resultado esperado**: la tabla muestra solo las ofertas que cumplen **todas** las condiciones a la vez; con varios estados marcados, basta con que la oferta tenga alguno de ellos. Arriba se ve el recuento y la suma del importe y de las jornadas de todo el resultado filtrado, no solo de la página que estás viendo. La dirección del navegador refleja los filtros (fechas y estados incluidos), así que puedes recargar o compartir esa vista. El botón **Limpiar filtros** vuelve al listado completo, con ambas fechas y todos los estados otra vez vacíos. Pulsando los títulos de las columnas Número, Fecha, Cliente, Estado e Importe se ordena por esa columna sin perder los filtros ni la página siguiente/anterior.
+
+### 8b. Rango de fechas incoherente
+
+En **Todas las ofertas**, escribe en **Fecha desde** una fecha posterior a la de **Fecha hasta** y pulsa **Aplicar filtros**.
+
+> **Resultado esperado**: la aplicación no ejecuta ningún filtro incoherente: muestra un aviso explicando que «Desde» no puede ser posterior a «Hasta», sin listar ninguna oferta, y el formulario de filtros sigue visible para corregirlo.
 
 ### 9. Modificar descripción, importe y jornadas
 
@@ -233,11 +240,11 @@ Entra en **Administración > Maestros de oferta**, busca el motivo de cancelaci�
 
 > **Resultado esperado**: el registro sigue en la tabla de Administración, ahora con la etiqueta gris `Inactivo`. Si abres la oferta que lo usa, el motivo y el cliente **siguen apareciendo con normalidad**. Si abres **Nueva oferta**, ese cliente ya no aparece entre los seleccionables; pero si abres **Modificar** en la oferta que ya lo usaba, sí sigue disponible, marcado como `(inactivo)`, para que puedas guardar los cambios sin perder el dato.
 
-### 12. Crear un usuario normal y comprobar sus permisos
+### 12. Crear un acceso desde «Personas y accesos» y comprobar sus permisos
 
-Entra en **Administración > Usuarios** y crea uno vinculado a una de las personas que creaste antes (por ejemplo, la persona comercial), con rol `Usuario` y una contraseña temporal. Abre una ventana de navegación privada, entra con ese usuario y cambia la contraseña cuando te lo pida.
+Entra en **Administración > Personas y accesos**. Busca la fila de una persona que todavía no tenga acceso (por ejemplo, la persona comercial) y, en la propia fila, rellena **Crear acceso**: usuario, rol `Usuario` y una contraseña temporal. No hace falta volver a seleccionar la persona en ninguna otra pantalla. Comprueba también que si escribes directamente `http://localhost:3000/admin/users`, te lleva a esta misma pantalla. Abre una ventana de navegación privada, entra con ese usuario y cambia la contraseña cuando te lo pida.
 
-> **Resultado esperado**: con ese usuario no ves el menú **Administración**. Si escribes directamente la URL `/admin/clients`, se te deniega el acceso. En **Todas las ofertas** solo ves las ofertas donde esa persona es comercial o PM, o las que ese usuario ha creado; no ves el resto.
+> **Resultado esperado**: tras crear el acceso, la fila de esa persona muestra su usuario, el rol y el estado `Activo`, junto a las acciones para activar/desactivar el acceso, cambiar el rol y generar una nueva contraseña temporal. `/admin/users` redirige a `/admin/people` sin errores. Tras cambiar la contraseña obligatoria, ese usuario aterriza en `Panel de notificaciones`, que aparece en el menú antes del Gestor de Ofertas; no ve el menú **Administración**, y si escribe directamente la URL `/admin/clients`, se le deniega el acceso. En **Todas las ofertas** solo ve las ofertas donde esa persona es comercial o PM, o las que ese usuario ha creado; no ve el resto.
 
 ### 13. Pedido de Navision obligatorio en «Aceptado»
 
@@ -263,11 +270,11 @@ En la misma ficha, adjunta un PDF pequeño (o cualquier imagen `.png`/`.jpg`). D
 
 > **Resultado esperado**: el PDF se sube y aparece en la lista, con enlace de descarga que funciona. El `.exe` y el archivo demasiado grande se rechazan con un mensaje claro.
 
-### 17. Archivar y recuperar una oferta
+### 17. Sin archivo de ofertas: todo sigue localizable
 
-Abre una oferta y pulsa **Archivar**, confirmando el aviso. Entra después en **Ofertas archivadas** desde el menú.
+Comprueba que en el menú y en la ficha de una oferta ya no existen las acciones **Archivar** ni **Recuperar**, ni la pantalla «Ofertas archivadas». Anula una oferta (paso 10) y búscala después en **Todas las ofertas** sin ningún filtro, y otra vez filtrando por el estado `Anulado`.
 
-> **Resultado esperado**: la oferta desaparece de **Todas las ofertas** pero aparece en **Ofertas archivadas**, con el mismo número y los mismos datos. Ábrela y pulsa **Recuperar**: vuelve a aparecer en el listado ordinario.
+> **Resultado esperado**: la oferta anulada aparece con normalidad en el listado ordinario en ambos casos: `Anulado` es un estado de negocio como cualquier otro, no una forma de archivo. Si tu base de datos venía de una instalación DEV-004 con alguna oferta archivada, esa oferta ya aparece también en el listado ordinario tras aplicar esta entrega (la migración la recupera automáticamente).
 
 ### 18. Notificaciones internas
 
@@ -275,17 +282,17 @@ Con dos usuarios distintos (uno comercial, otro PM de la misma oferta), crea una
 
 > **Resultado esperado**: el PM tiene una notificación nueva sobre la oferta creada; el comercial que la creó no se notifica a sí mismo. Al abrirla se marca como leída.
 
-### 19. Regla de notificación «Interna + email»
+### 19. Regla de notificación «Interna + email» y filas progresivas
 
-Entra en **Administración > Reglas de notificación** y crea una regla nueva con canal `Interna + email`.
+Entra en **Administración > Reglas de notificación**. Comprueba que cada bloque (`Cumplir TODAS las condiciones`, `Cumplir CUALQUIERA de las condiciones`, `Destinatarios`) empieza mostrando una única fila `— Sin usar —`. Completa esa fila y comprueba que aparece una segunda; completa la segunda y comprueba que aparece la tercera, hasta un máximo de cuatro. Crea una regla nueva con canal `Interna + email`.
 
-> **Resultado esperado**: la regla se crea y muestra el aviso de que el envío por email está pendiente de configuración. No se produce ningún intento de envío real.
+> **Resultado esperado**: nunca hay más de una fila vacía visible al final de cada bloque, ni más de cuatro en total. La regla se crea y muestra el aviso de que el envío por email está pendiente de configuración. No se produce ningún intento de envío real.
 
-### 20. Exportar a Excel
+### 20. Exportar a Excel con los nuevos filtros
 
-En **Todas las ofertas**, aplica algún filtro y pulsa **Exportar a Excel**.
+En **Todas las ofertas**, aplica un rango de fechas y selecciona dos o más estados, y pulsa **Exportar a Excel**.
 
-> **Resultado esperado**: se descarga un archivo `ofertas-AAAA-MM-DD.xlsx` con tres hojas (`Ofertas`, `Jornadas`, `Historial`) que contienen únicamente las ofertas que cumplen el filtro aplicado.
+> **Resultado esperado**: se descarga un archivo `ofertas-AAAA-MM-DD.xlsx` con tres hojas (`Ofertas`, `Jornadas`, `Historial`) que contienen únicamente las ofertas que cumplen el rango de fechas y alguno de los estados seleccionados. La hoja `Ofertas` ya no tiene columnas `Idioma` ni `Archivada`; conserva `Cod. Cliente`, y `Año`/`Mes` como columnas derivadas.
 
 ### 21. Administración del contador
 
@@ -300,7 +307,7 @@ Para evitar confusiones durante la prueba, estas cosas **no** existen todavía, 
 - SSO, Azure AD, OAuth, LDAP ni recuperación de contraseña por email: la autenticación es local y provisional (`DEC-019`).
 - Envío real de correo: el canal «Interna + email» de las reglas de notificación no envía ni simula ningún email.
 - Restauración de una versión antigua de una oferta a partir del historial.
-- Borrado físico de ofertas, comentarios, adjuntos, auditoría o versiones desde la interfaz: solo archivo lógico y desactivación de maestros.
+- Borrado físico de ofertas, comentarios, adjuntos, auditoría o versiones desde la interfaz: solo desactivación de maestros. Ya no existe tampoco el archivo lógico de ofertas (`DEC-016` sustituida): toda oferta es siempre localizable por su estado.
 - Migración del histórico desde el Excel o SQL Server legado.
 - Despliegue, Docker o infraestructura de producción.
 

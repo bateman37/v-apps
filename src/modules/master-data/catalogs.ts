@@ -1,11 +1,11 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 
 /**
- * Definición compartida de los ocho catálogos del Gestor de Ofertas.
+ * Definición compartida de los siete catálogos del Gestor de Ofertas.
  *
- * Los ocho tienen exactamente la misma forma (`code`, `name`, `sortOrder`,
+ * Los siete tienen exactamente la misma forma (`code`, `name`, `sortOrder`,
  * `isActive`), así que comparten validación, acciones y componentes en lugar
- * de duplicar ocho implementaciones. No se construye un framework genérico:
+ * de duplicar siete implementaciones. No se construye un framework genérico:
  * es una tabla de correspondencias explícita y cerrada.
  */
 
@@ -16,7 +16,6 @@ export const CATALOG_KEYS = [
   "offerStatuses",
   "segmentations",
   "professionalProfiles",
-  "languages",
   "cancellationReasons",
 ] as const;
 
@@ -32,7 +31,6 @@ export const CATALOG_LABELS: Record<CatalogKey, { plural: string; singular: stri
     plural: "Perfiles profesionales",
     singular: "el perfil profesional",
   },
-  languages: { plural: "Idiomas", singular: "el idioma" },
   cancellationReasons: {
     plural: "Motivos de cancelación",
     singular: "el motivo de cancelación",
@@ -45,8 +43,6 @@ export const CATALOG_NOTES: Partial<Record<CatalogKey, string>> = {
     "El flujo y las transiciones entre estados siguen pendientes de decisión (DEC-051): cualquier estado puede seleccionarse en una oferta.",
   cancellationReasons:
     "Sin valores aprobados todavía: una instalación nueva empieza vacía. El motivo es obligatorio cuando una oferta pasa al estado «Anulado».",
-  languages:
-    "Sin valores aprobados todavía: una instalación nueva empieza vacía.",
   professionalProfiles:
     "Los códigos son los funcionales ya conocidos y no deben renombrarse.",
 };
@@ -62,7 +58,6 @@ const MODEL_BY_KEY = {
   offerStatuses: "offerStatus",
   segmentations: "segmentation",
   professionalProfiles: "professionalProfile",
-  languages: "language",
   cancellationReasons: "cancellationReason",
 } as const satisfies Record<CatalogKey, keyof PrismaClient>;
 
@@ -74,7 +69,7 @@ export type CatalogRecordData = {
 };
 
 /**
- * Vista mínima y común de un delegado de Prisma para los ocho catálogos.
+ * Vista mínima y común de un delegado de Prisma para los siete catálogos.
  * Solo se declaran las operaciones que la administración necesita; el borrado
  * físico no forma parte de esta interfaz a propósito (DEC-017).
  */
@@ -96,8 +91,8 @@ export type CatalogDelegate = {
 /**
  * Devuelve el delegado del catálogo indicado.
  *
- * La conversión de tipo es deliberada y está acotada: los ocho modelos tienen
- * exactamente los mismos campos, pero TypeScript no puede unificar ocho
+ * La conversión de tipo es deliberada y está acotada: los siete modelos tienen
+ * exactamente los mismos campos, pero TypeScript no puede unificar siete
  * delegados distintos de Prisma en una sola llamada. `CatalogDelegate`
  * describe el contrato real y exacto que se usa, de modo que la conversión no
  * oculta ninguna diferencia de esquema.

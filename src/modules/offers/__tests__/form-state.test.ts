@@ -26,7 +26,6 @@ describe("readOfferFormValues — conservación de valores tras un error (bloque
     formData.set("offerTypeId", "offer-type-1");
     formData.set("segmentationId", "segmentation-1");
     formData.set("requesterName", "Solicitante sintético");
-    formData.set("languageId", "language-1");
     formData.set("notes", "Observaciones sintéticas");
     formData.set("estimatedCommercialDeliveryDate", "2026-04-01");
     formData.set("estimatedClientDeliveryDate", "2026-04-15");
@@ -56,7 +55,6 @@ describe("readOfferFormValues — conservación de valores tras un error (bloque
       offerTypeId: "offer-type-1",
       segmentationId: "segmentation-1",
       requesterName: "Solicitante sintético",
-      languageId: "language-1",
       notes: "Observaciones sintéticas",
       estimatedCommercialDeliveryDate: "2026-04-01",
       estimatedClientDeliveryDate: "2026-04-15",

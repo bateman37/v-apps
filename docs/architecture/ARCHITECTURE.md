@@ -47,7 +47,7 @@ src/
   modules/
     offers/             Dominio y casos de uso del Gestor de Ofertas.
     admin/              Administración de clientes y personas, y piezas comunes.
-    master-data/        Los ocho catálogos: lectura y administración.
+    master-data/        Los siete catálogos vigentes: lectura y administración.
     audit/              Registro de auditoría compartido.
   lib/
     db/                 Cliente Prisma y traducción segura de errores.

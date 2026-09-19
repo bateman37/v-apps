@@ -50,7 +50,6 @@ export type OfferSnapshot = {
   offerType: SnapshotRef;
   status: SnapshotRef;
   segmentation: SnapshotRef;
-  language: SnapshotRef;
   cancellationReason: SnapshotRef;
   offerDate: string;
   description: string;
@@ -88,7 +87,6 @@ export const OFFER_SNAPSHOT_SELECT = {
   offerType: { select: { id: true, code: true, name: true } },
   status: { select: { id: true, code: true, name: true } },
   segmentation: { select: { id: true, code: true, name: true } },
-  language: { select: { id: true, code: true, name: true } },
   cancellationReason: { select: { id: true, code: true, name: true } },
   profileDays: {
     select: {
@@ -129,7 +127,6 @@ export function buildOfferSnapshot(offer: SnapshotSource): OfferSnapshot {
     offerType: ref(offer.offerType),
     status: ref(offer.status),
     segmentation: ref(offer.segmentation),
-    language: ref(offer.language),
     cancellationReason: ref(offer.cancellationReason),
     offerDate: offer.offerDate.toISOString().slice(0, 10),
     description: offer.description,
@@ -194,7 +191,6 @@ export const SNAPSHOT_FIELD_LABELS: Record<string, string> = {
   offerType: "Tipo de oferta",
   status: "Estado",
   segmentation: "Segmentación",
-  language: "Idioma",
   cancellationReason: "Motivo de cancelación",
   offerDate: "Fecha de la oferta",
   description: "Descripción",

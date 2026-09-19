@@ -1,6 +1,5 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { Suspense } from "react";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { LocalEnvironmentNotice } from "@/components/layout/local-environment-notice";
 import { logoutAction } from "@/modules/auth/actions";
@@ -50,10 +49,7 @@ export function AppShell({
           </p>
         </div>
 
-        {/* `useSearchParams` obliga a un límite de Suspense en el App Router. */}
-        <Suspense fallback={null}>
-          <SidebarNav isAdmin={isAdmin} />
-        </Suspense>
+        <SidebarNav isAdmin={isAdmin} />
 
         <div className="mt-auto pt-4">
           <LocalEnvironmentNotice />

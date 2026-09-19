@@ -26,11 +26,11 @@ function buildOffersParams(
   if (filters.q) {
     params.set("q", filters.q);
   }
-  if (filters.year !== null) {
-    params.set("year", String(filters.year));
+  if (filters.dateFrom !== null) {
+    params.set("dateFrom", filters.dateFrom);
   }
-  if (filters.month !== null) {
-    params.set("month", String(filters.month));
+  if (filters.dateTo !== null) {
+    params.set("dateTo", filters.dateTo);
   }
   if (filters.clientId) {
     params.set("clientId", filters.clientId);
@@ -41,20 +41,15 @@ function buildOffersParams(
   if (filters.projectManagerId) {
     params.set("projectManagerId", filters.projectManagerId);
   }
-  if (filters.statusId) {
-    params.set("statusId", filters.statusId);
+  // Parámetro repetible: cada estado seleccionado es un `statusId` propio.
+  for (const statusId of filters.statusIds) {
+    params.append("statusId", statusId);
   }
   if (filters.offerTypeId) {
     params.set("offerTypeId", filters.offerTypeId);
   }
   if (filters.originId) {
     params.set("originId", filters.originId);
-  }
-  // Preservar el ámbito (activas/archivadas, bloque 7) en cualquier enlace
-  // derivado del listado: ordenar, paginar o exportar desde «Ofertas
-  // archivadas» debe seguir viendo archivadas, nunca volver a activas.
-  if (filters.scope === "archivadas") {
-    params.set("scope", filters.scope);
   }
 
   params.set("sort", sort);
@@ -73,7 +68,7 @@ export function buildOffersUrl(
   return `/offers?${buildOffersParams(filters, overrides).toString()}`;
 }
 
-/** URL de exportación a Excel con exactamente los mismos filtros y ámbito. */
+/** URL de exportación a Excel con exactamente los mismos filtros. */
 export function buildOffersExportUrl(filters: OfferListFilters): string {
   return `/offers/export?${buildOffersParams(filters).toString()}`;
 }

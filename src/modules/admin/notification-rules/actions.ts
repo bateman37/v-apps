@@ -33,7 +33,6 @@ const CONDITION_FIELDS = [
   "COMMERCIAL",
   "CREATOR",
   "CLIENT",
-  "ARCHIVED",
 ] as const;
 const CONDITION_OPERATORS = ["IS", "IS_NOT"] as const;
 const RECIPIENT_KINDS = [
@@ -113,14 +112,12 @@ function parseConditions(
       condition.statusId = value || null;
     } else if (fieldRaw === "CLIENT") {
       condition.clientId = value || null;
-    } else if (fieldRaw === "ARCHIVED") {
-      condition.booleanValue = value === "true";
     } else {
       // PROJECT_MANAGER, COMMERCIAL, CREATOR: se comparan por persona.
       condition.personId = value || null;
     }
 
-    if (fieldRaw !== "ARCHIVED" && !value) {
+    if (!value) {
       errors[`${prefix}_${index}`] = "Selecciona un valor para esta condición.";
       continue;
     }

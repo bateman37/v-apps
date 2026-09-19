@@ -30,7 +30,7 @@ export function AttachmentUploadForm({ offerId }: { offerId: string }) {
   );
 
   return (
-    <form action={formAction} noValidate encType="multipart/form-data" className="flex flex-wrap items-end gap-3">
+    <form action={formAction} noValidate className="flex flex-wrap items-end gap-3">
       <input type="hidden" name="offerId" value={offerId} />
       <div>
         <label className="v-label" htmlFor="attachment-file">

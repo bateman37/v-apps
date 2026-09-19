@@ -7,8 +7,10 @@ import { readString } from "@/lib/validation";
 import { recordAudit } from "@/modules/audit/audit";
 import { authError, type AuthFormState } from "@/modules/auth/action-state";
 import {
+  isAdmin,
   MAX_USERNAME_LENGTH,
   normalizeUsername,
+  type Role,
 } from "@/modules/auth/identity";
 import {
   checkPasswordStrength,
@@ -103,7 +105,7 @@ export async function loginAction(
 
     destination = user.mustChangePassword
       ? "/cuenta/contrasena?motivo=inicial"
-      : safeRedirectTarget(redirectToRaw);
+      : safeRedirectTarget(redirectToRaw, user.role);
   } catch (error) {
     return authError({ _form: toSafeErrorMessage(error) });
   }
@@ -114,8 +116,12 @@ export async function loginAction(
 /**
  * Solo se admite como destino una ruta interna absoluta. Se descarta cualquier
  * URL con esquema o con `//`, que podría llevar a un dominio externo.
+ *
+ * Sin un destino explícito y válido, la página inicial depende del rol
+ * (hotfix DEV-005, bloque 9): un `USER` aterriza en su panel de
+ * notificaciones; un `ADMIN` conserva `/offers`.
  */
-function safeRedirectTarget(value: string): string {
+function safeRedirectTarget(value: string, role: Role): string {
   if (
     value.startsWith("/") &&
     !value.startsWith("//") &&
@@ -123,7 +129,7 @@ function safeRedirectTarget(value: string): string {
   ) {
     return value;
   }
-  return "/offers";
+  return isAdmin({ role }) ? "/offers" : "/notificaciones";
 }
 
 export async function logoutAction(): Promise<void> {
@@ -202,5 +208,17 @@ export async function changeOwnPasswordAction(
   // navegador aplique esa cookie nueva antes de la siguiente petición. Sin
   // el redirect, la petición siguiente podía llegar todavía con la cookie
   // antigua (ya revocada) y forzar un reinicio de sesión no deseado.
-  redirect("/cuenta/contrasena?motivo=actualizada");
+  //
+  // Tras completar el cambio obligatorio del primer acceso, el destino
+  // depende del rol (hotfix DEV-005, bloque 9): un `USER` aterriza en su
+  // panel de notificaciones; un `ADMIN` conserva `/offers`. Un cambio de
+  // contraseña voluntario (no obligatorio) vuelve a la propia pantalla, como
+  // hasta ahora.
+  redirect(
+    user.mustChangePassword
+      ? isAdmin(user)
+        ? "/offers"
+        : "/notificaciones"
+      : "/cuenta/contrasena?motivo=actualizada",
+  );
 }

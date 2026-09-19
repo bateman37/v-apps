@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { visibleNavSections } from "@/components/layout/nav-items";
 
 /**
@@ -10,14 +10,10 @@ import { visibleNavSections } from "@/components/layout/nav-items";
  * activa; el resto del layout se mantiene en servidor.
  *
  * El enlace activo es el de coincidencia más larga, para que `/offers/new`
- * resalte «Nueva oferta» y no también «Todas las ofertas». «Ofertas
- * archivadas» y «Todas las ofertas» comparten ruta y se distinguen por el
- * parámetro `scope`.
+ * resalte «Nueva oferta» y no también «Todas las ofertas».
  */
 export function SidebarNav({ isAdmin }: { isAdmin: boolean }) {
   const pathname = usePathname() ?? "";
-  const searchParams = useSearchParams();
-  const isArchivedScope = searchParams?.get("scope") === "archivadas";
   const sections = visibleNavSections(isAdmin);
 
   const candidates = sections
@@ -28,15 +24,6 @@ export function SidebarNav({ isAdmin }: { isAdmin: boolean }) {
     });
 
   const activeHref = candidates
-    .filter((item) => {
-      if (item.href.includes("scope=archivadas")) {
-        return isArchivedScope;
-      }
-      if (item.href === "/offers") {
-        return !isArchivedScope;
-      }
-      return true;
-    })
     .map((item) => item.href)
     .sort((left, right) => right.split("?")[0].length - left.split("?")[0].length)[0];
 

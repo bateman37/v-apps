@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Alert } from "@/components/ui/alert";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { formatCurrencyEur, formatDate, formatDays } from "@/lib/format";
@@ -17,22 +18,11 @@ import { buildOffersExportUrl, buildOffersUrl, nextSortDirection } from "@/modul
  * Pantalla «Todas las ofertas». Es un componente de servidor: la búsqueda, los
  * filtros, la ordenación y la paginación se resuelven en PostgreSQL y nunca
  * cargando todas las ofertas en el navegador.
+ *
+ * Desde DEV-005 no existe el concepto funcional de oferta archivada: es
+ * siempre el único listado, y todos los estados (incluido «Anulado») son
+ * siempre localizables (`DEC-016` sustituida).
  */
-
-const MONTHS = [
-  "Enero",
-  "Febrero",
-  "Marzo",
-  "Abril",
-  "Mayo",
-  "Junio",
-  "Julio",
-  "Agosto",
-  "Septiembre",
-  "Octubre",
-  "Noviembre",
-  "Diciembre",
-];
 
 const COLUMNS: Array<{ key: OfferSortField | null; label: string }> = [
   { key: "number", label: "Número" },
@@ -51,41 +41,45 @@ export function OffersListScreen({
   filters,
   filterOptions,
   result,
+  dateRangeError,
 }: {
   filters: OfferListFilters;
   filterOptions: OfferFilterOptions;
   result: OfferListResult;
+  /** `Desde` posterior a `Hasta`: no se ha ejecutado ninguna consulta. */
+  dateRangeError?: boolean;
 }) {
   const filtersActive = hasActiveOfferFilters(filters);
 
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title={filters.scope === "archivadas" ? "Ofertas archivadas" : "Gestor de Ofertas"}
-        subtitle={
-          filters.scope === "archivadas"
-            ? "Eliminación lógica (DEC-016): nada se ha borrado. Puedes consultarlas y recuperarlas."
-            : "Todas las ofertas registradas en PostgreSQL."
-        }
+        title="Gestor de Ofertas"
+        subtitle="Todas las ofertas registradas en PostgreSQL, en cualquier estado."
         actions={
           <>
-            {result.total > 0 ? (
+            {!dateRangeError && result.total > 0 ? (
               <a className="v-btn v-btn-secondary" href={buildOffersExportUrl(filters)}>
                 Exportar a Excel
               </a>
             ) : null}
-            {filters.scope !== "archivadas" ? (
-              <Link className="v-btn v-btn-primary" href="/offers/new">
-                Nueva oferta
-              </Link>
-            ) : null}
+            <Link className="v-btn v-btn-primary" href="/offers/new">
+              Nueva oferta
+            </Link>
           </>
         }
       />
 
       <OfferFilters filters={filters} options={filterOptions} active={filtersActive} />
 
-      {result.total === 0 ? (
+      {dateRangeError ? (
+        <Alert tone="error" title="El rango de fechas no es válido">
+          <p>
+            La fecha «Desde» no puede ser posterior a la fecha «Hasta». Corrige el
+            rango para ver el listado.
+          </p>
+        </Alert>
+      ) : result.total === 0 ? (
         <EmptyState
           title={
             filtersActive
@@ -330,29 +324,30 @@ function OfferFilters({
           />
         </div>
 
-        <FilterSelect
-          id="year"
-          label="Año"
-          emptyLabel="Todos"
-          defaultValue={filters.year === null ? "" : String(filters.year)}
-          options={options.years.map((year) => ({
-            id: String(year),
-            label: String(year),
-            isActive: true,
-          }))}
-        />
-
-        <FilterSelect
-          id="month"
-          label="Mes"
-          emptyLabel="Todos"
-          defaultValue={filters.month === null ? "" : String(filters.month)}
-          options={MONTHS.map((month, index) => ({
-            id: String(index + 1),
-            label: month,
-            isActive: true,
-          }))}
-        />
+        <div>
+          <label className="v-label" htmlFor="dateFrom">
+            Fecha desde
+          </label>
+          <input
+            id="dateFrom"
+            name="dateFrom"
+            type="date"
+            className="v-input"
+            defaultValue={filters.dateFrom ?? ""}
+          />
+        </div>
+        <div>
+          <label className="v-label" htmlFor="dateTo">
+            Fecha hasta
+          </label>
+          <input
+            id="dateTo"
+            name="dateTo"
+            type="date"
+            className="v-input"
+            defaultValue={filters.dateTo ?? ""}
+          />
+        </div>
 
         <FilterSelect
           id="clientId"
@@ -375,13 +370,7 @@ function OfferFilters({
           defaultValue={filters.projectManagerId}
           options={options.projectManagers}
         />
-        <FilterSelect
-          id="statusId"
-          label="Estado"
-          emptyLabel="Todos"
-          defaultValue={filters.statusId}
-          options={options.statuses}
-        />
+        <StatusFilter statusIds={filters.statusIds} statuses={options.statuses} />
         <FilterSelect
           id="offerTypeId"
           label="Tipo de oferta"
@@ -438,6 +427,59 @@ function FilterSelect({
           </option>
         ))}
       </select>
+    </div>
+  );
+}
+
+/**
+ * Multiselección accesible de estados (bloque 6.2), como un desplegable
+ * `<details>` con casillas: sin selección equivale a «todos los estados»,
+ * incluido «Anulado». No necesita JavaScript: cada casilla es un campo normal
+ * de un formulario `GET`, y desmarcarlas todas no recarga la página por sí
+ * solo, solo al pulsar «Aplicar filtros».
+ */
+function StatusFilter({
+  statusIds,
+  statuses,
+}: {
+  statusIds: string[];
+  statuses: SelectOption[];
+}) {
+  const selectedCount = statusIds.length;
+  const summaryText =
+    selectedCount === 0
+      ? "Estado: todos"
+      : `Estado: ${selectedCount} seleccionado${selectedCount === 1 ? "" : "s"}`;
+
+  return (
+    <div>
+      <span className="v-label" id="status-filter-label">
+        Estado
+      </span>
+      <details className="v-input p-0">
+        <summary
+          className="cursor-pointer select-none px-3 py-2 text-sm"
+          aria-labelledby="status-filter-label"
+        >
+          {summaryText}
+        </summary>
+        <fieldset className="flex flex-col gap-1 border-t px-3 py-2" style={{ borderColor: "var(--color-border)" }}>
+          <legend className="sr-only">Estados a incluir en el listado</legend>
+          {statuses.map((status) => (
+            <label key={status.id} className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                name="statusId"
+                value={status.id}
+                defaultChecked={statusIds.includes(status.id)}
+                className="size-4 accent-[var(--color-primary)]"
+              />
+              {status.label}
+            </label>
+          ))}
+        </fieldset>
+      </details>
+      <p className="v-hint">Sin ninguno marcado se muestran todos los estados.</p>
     </div>
   );
 }

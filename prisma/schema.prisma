@@ -119,8 +119,14 @@ model ProfessionalProfile {
   @@map("professional_profiles")
 }
 
-/// Maestro de idiomas de oferta. Todavía sin valores aprobados
-/// (ver docs/shared/MASTER_DATA.md): la tabla existe vacía en esta entrega.
+/// @deprecated (DEV-005): `Idioma` se retira de toda la experiencia funcional
+/// del Gestor de Ofertas (formularios, ficha, Administración, filtros,
+/// exportación e instantáneas nuevas de versión). Esta tabla y la columna
+/// `Offer.languageId` se conservan **sin uso funcional** por compatibilidad
+/// técnica con datos e instantáneas ya existentes: eliminarlas ahora sería una
+/// migración destructiva innecesaria. Quedan pendientes de limpieza física
+/// futura una vez confirmada la ausencia de datos relevantes. Ver
+/// docs/decisions/DECISIONS.md.
 model Language {
   id        String   @id @default(cuid())
   code      String   @unique
@@ -239,6 +245,7 @@ model Offer {
   estimatedPortfolioDate          DateTime? @map("estimated_portfolio_date") @db.Date
   segmentationId                  String?   @map("segmentation_id")
   notes                           String?
+  /// @deprecated (DEV-005): sin uso funcional. Ver el comentario de `Language`.
   languageId                      String?   @map("language_id")
   navisionOrder                   String?   @map("navision_order")
   cancellationReasonId            String?   @map("cancellation_reason_id")

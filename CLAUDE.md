@@ -27,15 +27,15 @@
 
 ## Estado de la implementación
 
-El repositorio **contiene código de aplicación** desde DEV-002 y, desde DEV-004, el Gestor de Ofertas está funcionalmente cerrado sobre autenticación local:
+El repositorio **contiene código de aplicación** desde DEV-002 y, desde DEV-005, incorpora un hotfix de usabilidad sobre el cierre funcional de DEV-004:
 
 - Next.js (App Router) con React y TypeScript estricto, Tailwind CSS y Prisma sobre PostgreSQL.
-- Autenticación local provisional (`User`, `Session`, roles `ADMIN`/`USER`), con `requireUser`/`requireAdmin` y `canAccessOffer` comprobados en cada página y cada Server Action.
-- Modelo transaccional completo del módulo: `Client` (con código obligatorio), `Person`, `Offer`, `OfferProfileDays`, `OfferStatusHistory`, `OfferVersion`, `OfferComment`, `OfferAttachment`, `SystemCounter`, `AuditLog`, `NotificationRule`/`Notification`, además de los ocho catálogos de referencia.
-- Listado, alta, consulta, modificación, archivo/recuperación y exportación a Excel de ofertas, con numeración global segura ante concurrencia.
-- Comentarios, adjuntos, versiones y auditoría atribuible en la ficha de cada oferta.
-- Bandeja «Pendiente de revisión» y centro de notificaciones internas, con reglas configurables desde Administración.
-- Administración de clientes, personas, los ocho catálogos, usuarios, reglas de notificación y el contador de numeración.
+- Autenticación local provisional (`User`, `Session`, roles `ADMIN`/`USER`), con `requireUser`/`requireAdmin` y `canAccessOffer` comprobados en cada página y cada Server Action. Un `USER` aterriza en `/notificaciones`; un `ADMIN`, en `/offers`.
+- Modelo transaccional completo del módulo: `Client` (con código obligatorio), `Person`, `Offer`, `OfferProfileDays`, `OfferStatusHistory`, `OfferVersion`, `OfferComment`, `OfferAttachment`, `SystemCounter`, `AuditLog`, `NotificationRule`/`Notification`, además de los siete catálogos de referencia vigentes (`Language` queda deprecado desde DEV-005).
+- Listado, alta, consulta, modificación y exportación a Excel de ofertas, con numeración global segura ante concurrencia. Sin concepto funcional de archivo (`DEC-016` sustituida, DEV-005): toda oferta, en cualquier estado, es siempre localizable, con filtro de fecha `Desde`/`Hasta` y estados multiselección.
+- Comentarios, adjuntos (con adjuntar/descargar corregido en DEV-005), versiones y auditoría atribuible en la ficha de cada oferta.
+- Bandeja «Pendiente de revisión» y centro de notificaciones internas, con reglas configurables desde Administración (filas progresivas desde DEV-005).
+- Administración de clientes, «Personas y accesos» (pantalla unificada desde DEV-005; `/admin/users` redirige), los siete catálogos vigentes, reglas de notificación y el contador de numeración.
 - Identidad visual oficial de Vincle aplicada mediante tokens (ver [`docs/design/BRAND_UI.md`](docs/design/BRAND_UI.md)).
 
 **No** existen todavía: SSO ni ningún proveedor de autenticación corporativo definitivo, envío real de email, Docker, infraestructura de despliegue, migración del histórico, ni ningún módulo distinto del Gestor de Ofertas. La aplicación es únicamente apta para desarrollo local (`DEC-019`).

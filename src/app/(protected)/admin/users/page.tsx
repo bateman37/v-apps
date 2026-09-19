@@ -1,35 +1,10 @@
-import {
-  createUserAction,
-  resetUserPasswordAction,
-  setUserActiveAction,
-  setUserRoleAction,
-} from "@/modules/admin/users/actions";
-import { getPeopleWithoutUser, getUsers } from "@/modules/admin/users/data";
-import { UsersScreen } from "@/modules/admin/users/users-screen";
-import { requireAdmin } from "@/modules/auth/session";
+import { redirect } from "next/navigation";
 
-export default async function AdminUsersPage() {
-  await requireAdmin();
-  const [users, availablePeople] = await Promise.all([
-    getUsers(),
-    getPeopleWithoutUser(),
-  ]);
-
-  return (
-    <div>
-      <h1 className="mb-1 text-xl font-bold text-[var(--color-text)]">Usuarios</h1>
-      <p className="v-hint mb-6">
-        Autenticación local provisional (DEC-019). Cada cuenta se vincula a una persona
-        del maestro común.
-      </p>
-      <UsersScreen
-        users={users}
-        availablePeople={availablePeople}
-        createAction={createUserAction}
-        setActiveAction={setUserActiveAction}
-        setRoleAction={setUserRoleAction}
-        resetPasswordAction={resetUserPasswordAction}
-      />
-    </div>
-  );
+/**
+ * `Personas` y `Usuarios` se unificaron en «Personas y accesos» (hotfix
+ * DEV-005, bloque 7). Esta ruta se conserva únicamente para no romper
+ * marcadores existentes a `/admin/users`.
+ */
+export default function AdminUsersPage() {
+  redirect("/admin/people");
 }

@@ -2,6 +2,27 @@
 
 Registro de entregas realizadas sobre `v-apps`. Cada entrada resume el objetivo y el resultado de una entrega, con enlace al prompt que la originó.
 
+## [Sin versionar] — Hotfix de usabilidad del Gestor de Ofertas y notificaciones
+
+- **Prompt**: [`prompts/0005-hotfix-usabilidad-ofertas-notificaciones.md`](prompts/0005-hotfix-usabilidad-ofertas-notificaciones.md)
+- **Tipo**: hotfix funcional sobre DEV-004, a partir de las primeras pruebas reales del Product Owner. No amplía el producto con módulos nuevos.
+- **Resumen**:
+  - **Cliente solo por nombre fuera de su maestro**: los selectores operativos (ofertas, filtros, reglas de notificación) muestran únicamente el nombre del cliente; el código sigue siendo obligatorio y único en `/admin/clients` y se conserva en la exportación.
+  - **`Idioma` retirado** de alta, edición, ficha, Administración > Maestros de oferta, filtros, exportación y nuevas instantáneas de versión. `Language` y `Offer.languageId` quedan deprecados y sin uso funcional, conservados por compatibilidad técnica (sin migración destructiva).
+  - **Observaciones**: se retira el texto de ayuda bajo el campo; se conservan el campo, su versionado y el historial de comentarios.
+  - **Hotfix bloqueante de adjuntos**: se elimina la combinación incompatible de `encType` manual con una Server Action en `attachment-controls.tsx` (causaba el error de React y, en archivos grandes, `Failed to fetch`), y se amplía el límite de transporte de las Server Actions (`experimental.serverActions.bodySizeLimit`) con margen para el límite funcional estricto de 25 MB.
+  - **Sin archivo lógico de ofertas** (`DEC-016` sustituida por `DEC-016b`): se eliminan «Archivar»/«Recuperar», la vista «Ofertas archivadas» y el parámetro `scope`; toda oferta, incluida `Anulado`, es siempre localizable, filtrable y exportable. Migración de datos que recupera automáticamente las ofertas archivadas durante DEV-004 y desactiva de forma segura cualquier regla de notificación con la condición `ARCHIVED` (ninguna la usaba en el seed inicial).
+  - **Filtros del listado**: `Año`/`Mes` se sustituyen por `Fecha desde`/`Fecha hasta` (rango inclusivo sobre `offerDate`), con aviso y sin ejecutar la consulta si `Desde` es posterior a `Hasta`. El selector único de `Estado` se sustituye por una multiselección accesible (`<details>` con casillas, parámetro `statusId` repetible), sin filtro por defecto equivalente a «todos los estados». Todo persiste en la URL, la paginación, la ordenación y la exportación.
+  - **«Personas y accesos»** (`/admin/people`): pantalla única de Administración para el maestro de personas y sus cuentas de acceso, creando o gestionando el acceso desde la propia fila. `Person` y `User` siguen siendo modelos separados; `/admin/users` redirige a la pantalla unificada.
+  - **Reglas de notificación con filas progresivas**: cada bloque (`TODAS`, `CUALQUIERA`, `Destinatarios`) empieza con una única fila vacía y añade la siguiente al completarla, hasta el máximo de cuatro ya existente. Se retira `ARCHIVED` del catálogo de condiciones seleccionables (el valor del enum se conserva por compatibilidad).
+  - **Panel de notificaciones como entrada principal**: aparece en el menú antes del Gestor de Ofertas. Un `USER` aterriza en `/notificaciones` tras iniciar sesión, al visitar `/` y tras completar el cambio obligatorio de contraseña; un `ADMIN` conserva `/offers`.
+- **Migración**: `20260919180000_dev005_offers_archive_removal_and_rule_cleanup`, de datos (sin cambios de esquema): recupera las ofertas archivadas de DEV-004 y desactiva reglas de notificación que usaran `ARCHIVED`.
+- **Decisión sustituida**: `DEC-016` → `DEC-016b`. Nuevas decisiones registradas: `DEC-062`, `DEC-063`, `DEC-064`, `DEC-065`.
+- **Pruebas añadidas**: parser/serializador de filtros (`dateFrom`, `dateTo`, varios `statusId`), construcción de la condición Prisma (rango inclusivo, `statusId in [...]`), estado inicial sin filtros, y el helper puro de filas progresivas de las reglas de notificación.
+- **Validado manualmente en navegador**: adjuntar un PDF válido, una imagen, un archivo con extensión no permitida y uno superior a 25 MB; descarga y persistencia tras recargar; selector de cliente sin código; filtros de fecha y multiselección de estados, incluido el aviso de rango incoherente; pantalla unificada de personas y accesos, incluida la creación de un acceso desde la fila; redirección de `/admin/users`; filas progresivas de reglas de notificación; y las redirecciones de `/`, login y cambio de contraseña obligatorio para `ADMIN` y `USER`.
+- **Sigue pendiente**: todo lo ya pendiente en DEV-004 (`DEC-054`, `DEC-056`, `DEC-057`, `DEC-058`, `DEC-059`, `DEC-060`, `DEC-061`).
+- **Siguiente objetivo**: ver [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md).
+
 ## [Sin versionar] — Cierre funcional del Gestor de Ofertas, autenticación local y notificaciones
 
 - **Prompt**: [`prompts/0004-cierre-gestor-ofertas-autenticacion-notificaciones.md`](prompts/0004-cierre-gestor-ofertas-autenticacion-notificaciones.md)
