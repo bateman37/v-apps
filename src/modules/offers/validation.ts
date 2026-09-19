@@ -68,7 +68,6 @@ export type OfferFormValues = {
   offerTypeId: string;
   segmentationId: string;
   requesterName: string;
-  languageId: string;
   notes: string;
   estimatedCommercialDeliveryDate: string;
   estimatedClientDeliveryDate: string;
@@ -101,7 +100,6 @@ export type ValidatedOffer = {
   estimatedPortfolioDate: string | null;
   segmentationId: string | null;
   notes: string | null;
-  languageId: string | null;
   navisionOrder: string | null;
   cancellationReasonId: string | null;
   /** Solo perfiles con jornadas mayores que cero. */
@@ -137,7 +135,6 @@ export function emptyOfferFormValues(): OfferFormValues {
     offerTypeId: "",
     segmentationId: "",
     requesterName: "",
-    languageId: "",
     notes: "",
     estimatedCommercialDeliveryDate: "",
     estimatedClientDeliveryDate: "",
@@ -178,7 +175,6 @@ export function readOfferFormValues(
     offerTypeId: readString(formData, "offerTypeId"),
     segmentationId: readString(formData, "segmentationId"),
     requesterName: readString(formData, "requesterName"),
-    languageId: readString(formData, "languageId"),
     notes: readString(formData, "notes"),
     estimatedCommercialDeliveryDate: readString(
       formData,
@@ -252,7 +248,6 @@ export function validateOfferInput(
     values.navisionOrder,
   );
   const segmentationId = checkField(errors, "segmentationId", optionalSelection(), values.segmentationId);
-  const languageId = checkField(errors, "languageId", optionalSelection(), values.languageId);
   const rawCancellationReasonId = checkField(
     errors,
     "cancellationReasonId",
@@ -352,7 +347,6 @@ export function validateOfferInput(
     notes === undefined ||
     navisionOrder === undefined ||
     segmentationId === undefined ||
-    languageId === undefined ||
     estimatedCommercialDeliveryDate === undefined ||
     estimatedClientDeliveryDate === undefined ||
     estimatedPortfolioDate === undefined ||
@@ -382,7 +376,6 @@ export function validateOfferInput(
       estimatedPortfolioDate,
       segmentationId,
       notes,
-      languageId,
       navisionOrder,
       cancellationReasonId,
       profileDays,

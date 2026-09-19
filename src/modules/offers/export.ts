@@ -75,7 +75,6 @@ const OFFER_EXPORT_SELECT = {
   requesterName: true,
   notes: true,
   implantationText: true,
-  deletedAt: true,
   createdAt: true,
   updatedAt: true,
   client: { select: { code: true, name: true } },
@@ -84,7 +83,6 @@ const OFFER_EXPORT_SELECT = {
   origin: { select: { name: true } },
   priority: { select: { name: true } },
   segmentation: { select: { name: true } },
-  language: { select: { name: true } },
   cancellationReason: { select: { name: true } },
   commercial: { select: { name: true } },
   projectManager: { select: { name: true } },
@@ -100,10 +98,9 @@ type OfferExportRow = Prisma.OfferGetPayload<{ select: typeof OFFER_EXPORT_SELEC
 
 export async function buildOffersExportWorkbook(
   filters: OfferListFilters,
-  availableYears: readonly number[],
   user: AuthenticatedUser,
 ): Promise<ExcelJS.Buffer> {
-  const where = buildOfferWhere(filters, availableYears, user);
+  const where = buildOfferWhere(filters, user);
   const orderBy = buildOfferOrderBy(filters);
 
   const offers = await prisma.offer.findMany({
@@ -320,12 +317,10 @@ function buildOffersSheet(workbook: ExcelJS.Workbook, offers: OfferExportRow[]) 
     { header: "Solicitante", key: "requesterName", width: 18 },
     { header: "Motivo Cancelado", key: "cancellationReason", width: 22 },
     { header: "Fecha Estimada Cartera", key: "portfolioDate", width: 16 },
-    { header: "Idioma", key: "language", width: 12 },
     { header: "Implantación", key: "implantation", width: 20 },
     { header: "Prioridad", key: "priority", width: 12 },
     { header: "Segmentación", key: "segmentation", width: 20 },
     { header: "Observaciones", key: "notes", width: 30 },
-    { header: "Archivada", key: "archived", width: 10 },
     { header: "Creada el", key: "createdAt", width: 16 },
     { header: "Actualizada el", key: "updatedAt", width: 16 },
   ];
@@ -364,12 +359,10 @@ function buildOffersSheet(workbook: ExcelJS.Workbook, offers: OfferExportRow[]) 
       requesterName: offer.requesterName,
       cancellationReason: offer.cancellationReason?.name ?? "",
       portfolioDate: offer.estimatedPortfolioDate,
-      language: offer.language?.name ?? "",
       implantation: offer.implantationText ?? "",
       priority: offer.priority.name,
       segmentation: offer.segmentation?.name ?? "",
       notes: offer.notes ?? "",
-      archived: offer.deletedAt ? "Sí" : "No",
       createdAt: offer.createdAt,
       updatedAt: offer.updatedAt,
     };

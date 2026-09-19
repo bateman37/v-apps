@@ -25,7 +25,7 @@ const SELECT = {
 const ORDER_BY = [{ sortOrder: "asc" as const }, { name: "asc" as const }];
 
 /**
- * Lee los ocho catálogos del Gestor de Ofertas, activos e inactivos: en
+ * Lee los siete catálogos del Gestor de Ofertas, activos e inactivos: en
  * Administración un registro desactivado sigue siendo visible y editable.
  *
  * Puede lanzar si PostgreSQL no está disponible; la pantalla que la invoca es
@@ -39,7 +39,6 @@ export async function getMasterDataGroups(): Promise<MasterDataGroup[]> {
     offerStatuses,
     segmentations,
     professionalProfiles,
-    languages,
     cancellationReasons,
   ] = await Promise.all([
     prisma.priority.findMany({ select: SELECT, orderBy: ORDER_BY }),
@@ -48,7 +47,6 @@ export async function getMasterDataGroups(): Promise<MasterDataGroup[]> {
     prisma.offerStatus.findMany({ select: SELECT, orderBy: ORDER_BY }),
     prisma.segmentation.findMany({ select: SELECT, orderBy: ORDER_BY }),
     prisma.professionalProfile.findMany({ select: SELECT, orderBy: ORDER_BY }),
-    prisma.language.findMany({ select: SELECT, orderBy: ORDER_BY }),
     prisma.cancellationReason.findMany({ select: SELECT, orderBy: ORDER_BY }),
   ]);
 
@@ -59,7 +57,6 @@ export async function getMasterDataGroups(): Promise<MasterDataGroup[]> {
     offerStatuses,
     segmentations,
     professionalProfiles,
-    languages,
     cancellationReasons,
   };
 

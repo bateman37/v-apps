@@ -35,7 +35,6 @@ export default async function EditOfferPage({
     offerTypeId: offer.offerTypeId,
     statusId: offer.statusId,
     segmentationId: offer.segmentationId,
-    languageId: offer.languageId,
     cancellationReasonId: offer.cancellationReasonId,
     commercialId: offer.commercialId,
     projectManagerId: offer.projectManagerId,

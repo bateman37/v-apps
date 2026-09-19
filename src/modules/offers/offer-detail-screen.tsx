@@ -13,7 +13,6 @@ import {
   PENDING_PM_REVIEW_STATUS_CODE,
   PENDING_SALES_REVIEW_STATUS_CODE,
 } from "@/modules/auth/identity";
-import { ArchiveControls } from "@/modules/offers/archive-controls";
 import {
   AttachmentUploadForm,
   RemoveAttachmentForm,
@@ -31,7 +30,6 @@ export function OfferDetailScreen({
   savedNotice: "created" | "updated" | null;
   reviewStatusOptions: ReviewStatusOption[];
 }) {
-  const isArchived = offer.archivedAt !== null;
   const isPendingReview =
     offer.statusCode === PENDING_PM_REVIEW_STATUS_CODE ||
     offer.statusCode === PENDING_SALES_REVIEW_STATUS_CODE;
@@ -60,29 +58,15 @@ export function OfferDetailScreen({
         </Alert>
       ) : null}
 
-      {isArchived ? (
-        <Alert tone="warning" title="Oferta archivada">
-          Archivada{offer.archivedByName ? ` por ${offer.archivedByName}` : ""}. No se
-          ha borrado nada: recupérala para poder modificar sus datos.
-        </Alert>
-      ) : null}
-
       <PageHeader
         title={offer.number}
         subtitle={`${offer.clientName} · ${offer.statusName}`}
         actions={
           <>
-            {offer.canModify && !isArchived ? (
+            {offer.canModify ? (
               <Link className="v-btn v-btn-primary" href={`/offers/${offer.id}/edit`}>
                 Modificar
               </Link>
-            ) : null}
-            {offer.canModify ? (
-              <ArchiveControls
-                offerId={offer.id}
-                offerNumber={offer.number}
-                isArchived={isArchived}
-              />
             ) : null}
             <Link className="v-btn v-btn-secondary" href="/offers">
               Volver al listado
@@ -91,7 +75,7 @@ export function OfferDetailScreen({
         }
       />
 
-      {isPendingReview && offer.canModify && !isArchived ? (
+      {isPendingReview && offer.canModify ? (
         <Card title="Revisar">
           <ReviewForm
             offerId={offer.id}
@@ -106,10 +90,7 @@ export function OfferDetailScreen({
           <Item label="Número de oferta">
             <span className="v-num font-semibold">{offer.number}</span>
           </Item>
-          <Item label="Cliente">
-            {offer.clientCode ? `${offer.clientCode} · ` : ""}
-            {offer.clientName}
-          </Item>
+          <Item label="Cliente">{offer.clientName}</Item>
           <Item label="Implantación">{offer.implantationText ?? "—"}</Item>
           <Item label="Prioridad">{offer.priorityName}</Item>
           <Item label="Origen">{offer.originName}</Item>
@@ -127,7 +108,6 @@ export function OfferDetailScreen({
           <Item label="Tipo de oferta">{offer.offerTypeName}</Item>
           <Item label="Segmentación">{offer.segmentationName ?? "—"}</Item>
           <Item label="Solicitante">{offer.requesterName}</Item>
-          <Item label="Idioma">{offer.languageName ?? "—"}</Item>
           <Item label="Observaciones" wide>
             {offer.notes ?? "—"}
           </Item>
@@ -272,7 +252,7 @@ export function OfferDetailScreen({
       </Card>
 
       <Card title="Adjuntos">
-        {offer.canModify && !isArchived ? (
+        {offer.canModify ? (
           <div className="mb-4">
             <AttachmentUploadForm offerId={offer.id} />
           </div>

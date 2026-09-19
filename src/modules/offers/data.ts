@@ -1,6 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
-import { toDateInputValue } from "@/lib/format";
+import { fromDateInputValue, toDateInputValue } from "@/lib/format";
 import {
   canAccessOffer,
   isAdmin,
@@ -42,7 +42,6 @@ export type OfferFormOptions = {
   offerTypes: SelectOption[];
   statuses: SelectOption[];
   segmentations: SelectOption[];
-  languages: SelectOption[];
   cancellationReasons: SelectOption[];
   commercials: SelectOption[];
   projectManagers: SelectOption[];
@@ -66,7 +65,6 @@ export type ReferencedIds = {
   offerTypeId?: string | null;
   statusId?: string | null;
   segmentationId?: string | null;
-  languageId?: string | null;
   cancellationReasonId?: string | null;
   commercialId?: string | null;
   projectManagerId?: string | null;
@@ -120,7 +118,6 @@ export async function getOfferFormOptions(
     offerTypes,
     statuses,
     segmentations,
-    languages,
     cancellationReasons,
     commercials,
     projectManagers,
@@ -166,11 +163,6 @@ export async function getOfferFormOptions(
       select: CATALOG_SELECT,
       orderBy: CATALOG_ORDER,
     }),
-    prisma.language.findMany({
-      where: activeOrReferenced([referenced.languageId]),
-      select: CATALOG_SELECT,
-      orderBy: CATALOG_ORDER,
-    }),
     prisma.cancellationReason.findMany({
       where: activeOrReferenced([referenced.cancellationReasonId]),
       select: CATALOG_SELECT,
@@ -203,8 +195,10 @@ export async function getOfferFormOptions(
   return {
     clients: clients.map((client) => ({
       id: client.id,
+      // Selector operativo: solo el nombre (hotfix DEV-005, bloque 1). El
+      // código de cliente sigue siendo obligatorio y único, pero solo aporta
+      // valor en su propio maestro (`/admin/clients`) y en la exportación.
       label: [
-        client.code ? `${client.code} · ` : "",
         client.name,
         client.isActive ? "" : " (inactivo)",
         client.code ? "" : " (código pendiente)",
@@ -216,7 +210,6 @@ export async function getOfferFormOptions(
     offerTypes: toOptions(offerTypes),
     statuses: toOptions(statuses),
     segmentations: toOptions(segmentations),
-    languages: toOptions(languages),
     cancellationReasons: toOptions(cancellationReasons),
     commercials: toOptions(commercials),
     projectManagers: toOptions(projectManagers),
@@ -288,8 +281,6 @@ export type OfferDetail = {
   statusCode: string;
   segmentationId: string | null;
   segmentationName: string | null;
-  languageId: string | null;
-  languageName: string | null;
   cancellationReasonId: string | null;
   cancellationReasonName: string | null;
   offerDate: string;
@@ -305,11 +296,6 @@ export type OfferDetail = {
   navisionOrder: string | null;
   createdAt: string;
   updatedAt: string;
-  /** Archivo lógico (DEC-016). `null` significa oferta activa. */
-  archivedAt: string | null;
-  archivedByName: string | null;
-  restoredAt: string | null;
-  restoredByName: string | null;
   createdById: string | null;
   createdByName: string | null;
   profileDays: OfferProfileDaysDetail[];
@@ -317,7 +303,7 @@ export type OfferDetail = {
   statusHistory: OfferStatusHistoryEntry[];
   comments: OfferCommentEntry[];
   attachments: OfferAttachmentEntry[];
-  /** El usuario en curso puede modificar y archivar/recuperar esta oferta. */
+  /** El usuario en curso puede modificar esta oferta. */
   canModify: boolean;
 };
 
@@ -326,8 +312,8 @@ export type OfferDetail = {
  * puede verla**. Ambas situaciones devuelven lo mismo a propósito: la
  * respuesta no revela la existencia de una oferta ajena.
  *
- * A diferencia de DEV-003, las ofertas archivadas **sí** se devuelven: se
- * consultan en modo seguro y la pantalla ofrece recuperarlas.
+ * Desde DEV-005 no existe el concepto funcional de oferta archivada
+ * (`DEC-016` sustituida): todas las ofertas son siempre consultables.
  */
 export async function getOfferDetail(
   id: string,
@@ -338,11 +324,7 @@ export async function getOfferDetail(
     select: {
       id: true,
       number: true,
-      deletedAt: true,
-      restoredAt: true,
       createdById: true,
-      archivedBy: { select: { person: { select: { name: true } } } },
-      restoredBy: { select: { person: { select: { name: true } } } },
       createdBy: { select: { person: { select: { name: true } } } },
       comments: {
         select: {
@@ -375,7 +357,6 @@ export async function getOfferDetail(
       offerTypeId: true,
       statusId: true,
       segmentationId: true,
-      languageId: true,
       cancellationReasonId: true,
       offerDate: true,
       description: true,
@@ -398,7 +379,6 @@ export async function getOfferDetail(
       offerType: { select: { name: true } },
       status: { select: { name: true, code: true } },
       segmentation: { select: { name: true } },
-      language: { select: { name: true } },
       cancellationReason: { select: { name: true } },
       profileDays: {
         select: {
@@ -473,8 +453,6 @@ export async function getOfferDetail(
     statusCode: offer.status.code,
     segmentationId: offer.segmentationId,
     segmentationName: offer.segmentation?.name ?? null,
-    languageId: offer.languageId,
-    languageName: offer.language?.name ?? null,
     cancellationReasonId: offer.cancellationReasonId,
     cancellationReasonName: offer.cancellationReason?.name ?? null,
     offerDate: toDateInputValue(offer.offerDate),
@@ -494,10 +472,6 @@ export async function getOfferDetail(
     updatedAt: offer.updatedAt.toISOString(),
     profileDays,
     totalProfileDays: totalProfileDays(profileDays),
-    archivedAt: offer.deletedAt?.toISOString() ?? null,
-    archivedByName: offer.archivedBy?.person.name ?? null,
-    restoredAt: offer.restoredAt?.toISOString() ?? null,
-    restoredByName: offer.restoredBy?.person.name ?? null,
     createdById: offer.createdById,
     createdByName: offer.createdBy?.person.name ?? null,
     statusHistory: offer.statusHistory.map((entry) => ({
@@ -526,9 +500,9 @@ export async function getOfferDetail(
         attachment.removedAt === null &&
         (isAdmin(user) || attachment.uploadedById === user.id),
     })),
-    // Una oferta archivada se consulta en modo seguro: para cambiar sus datos
-    // funcionales hay que recuperarla primero.
-    canModify: offer.deletedAt === null,
+    // Sin concepto de archivo funcional (DEV-005): cualquier oferta accesible
+    // puede modificarse.
+    canModify: true,
   };
 }
 
@@ -552,26 +526,21 @@ export type SortDirection = "asc" | "desc";
 
 export type OfferListFilters = {
   q: string;
-  year: number | null;
-  month: number | null;
+  /** Fecha de oferta (`offerDate`) mínima, inclusive, en `YYYY-MM-DD`. */
+  dateFrom: string | null;
+  /** Fecha de oferta (`offerDate`) máxima, inclusive, en `YYYY-MM-DD`. */
+  dateTo: string | null;
   clientId: string;
   commercialId: string;
   projectManagerId: string;
-  statusId: string;
+  /** Multiselección (bloque 6.2). Vacío equivale a «todos los estados». */
+  statusIds: string[];
   offerTypeId: string;
   originId: string;
   sort: OfferSortField;
   dir: SortDirection;
   page: number;
-  /**
-   * Ámbito del listado. `activas` es el listado ordinario; `archivadas`
-   * muestra únicamente las ofertas archivadas (eliminación lógica, DEC-016),
-   * con la misma búsqueda, los mismos filtros y la misma exportación.
-   */
-  scope: OfferScope;
 };
-
-export type OfferScope = "activas" | "archivadas";
 
 export type RawSearchParams = Record<string, string | string[] | undefined>;
 
@@ -581,6 +550,14 @@ function readParam(params: RawSearchParams, key: string): string {
     return value[0] ?? "";
   }
   return typeof value === "string" ? value.trim() : "";
+}
+
+/** Todos los valores no vacíos de un parámetro repetible, deduplicados. */
+function readListParam(params: RawSearchParams, key: string): string[] {
+  const value = params[key];
+  const raw = Array.isArray(value) ? value : value !== undefined ? [value] : [];
+  const trimmed = raw.map((entry) => entry.trim()).filter((entry) => entry !== "");
+  return Array.from(new Set(trimmed));
 }
 
 function readIntParam(
@@ -600,25 +577,40 @@ function readIntParam(
   return parsed;
 }
 
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Fecha `YYYY-MM-DD` válida a partir de un parámetro de URL, o `null`. */
+function readDateParam(params: RawSearchParams, key: string): string | null {
+  const raw = readParam(params, key);
+  if (raw === "" || !ISO_DATE_PATTERN.test(raw)) {
+    return null;
+  }
+  const date = new Date(`${raw}T00:00:00.000Z`);
+  if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== raw) {
+    return null;
+  }
+  return raw;
+}
+
 /**
  * Interpreta los parámetros de URL del listado. Cualquier valor inválido se
  * descarta en silencio y se sustituye por el valor por defecto: la pantalla
- * nunca se rompe por un parámetro manipulado a mano.
+ * nunca se rompe por un parámetro manipulado a mano. Sin ningún parámetro,
+ * el resultado equivale a «todas las fechas, todos los estados» (bloque 6.3).
  */
 export function parseOfferListParams(params: RawSearchParams): OfferListFilters {
   const sortRaw = readParam(params, "sort");
   const dirRaw = readParam(params, "dir");
-  const scopeRaw = readParam(params, "scope");
   const page = readIntParam(params, "page", 1, 100_000) ?? 1;
 
   return {
     q: readParam(params, "q").slice(0, 200),
-    year: readIntParam(params, "year", 1900, 2999),
-    month: readIntParam(params, "month", 1, 12),
+    dateFrom: readDateParam(params, "dateFrom"),
+    dateTo: readDateParam(params, "dateTo"),
     clientId: readParam(params, "clientId"),
     commercialId: readParam(params, "commercialId"),
     projectManagerId: readParam(params, "projectManagerId"),
-    statusId: readParam(params, "statusId"),
+    statusIds: readListParam(params, "statusId"),
     offerTypeId: readParam(params, "offerTypeId"),
     originId: readParam(params, "originId"),
     sort: (OFFER_SORT_FIELDS as readonly string[]).includes(sortRaw)
@@ -626,7 +618,6 @@ export function parseOfferListParams(params: RawSearchParams): OfferListFilters 
       : "number",
     dir: dirRaw === "asc" ? "asc" : "desc",
     page,
-    scope: scopeRaw === "archivadas" ? "archivadas" : "activas",
   };
 }
 
@@ -634,50 +625,55 @@ export function parseOfferListParams(params: RawSearchParams): OfferListFilters 
 export function hasActiveOfferFilters(filters: OfferListFilters): boolean {
   return Boolean(
     filters.q ||
-      filters.year !== null ||
-      filters.month !== null ||
+      filters.dateFrom !== null ||
+      filters.dateTo !== null ||
       filters.clientId ||
       filters.commercialId ||
       filters.projectManagerId ||
-      filters.statusId ||
+      filters.statusIds.length > 0 ||
       filters.offerTypeId ||
       filters.originId,
   );
 }
 
-/** Rango `[desde, hasta)` en UTC para un filtro de año y/o mes. */
-function dateRangeFilter(
-  year: number | null,
-  month: number | null,
-): Prisma.DateTimeFilter | undefined {
-  if (year === null && month === null) {
-    return undefined;
-  }
-
-  if (year !== null && month !== null) {
-    const from = new Date(Date.UTC(year, month - 1, 1));
-    const to = new Date(Date.UTC(month === 12 ? year + 1 : year, month % 12, 1));
-    return { gte: from, lt: to };
-  }
-
-  if (year !== null) {
-    return {
-      gte: new Date(Date.UTC(year, 0, 1)),
-      lt: new Date(Date.UTC(year + 1, 0, 1)),
-    };
-  }
-
-  return undefined;
+/**
+ * `Desde` posterior a `Hasta` es un rango incoherente: quien llama debe
+ * mostrar un error y no ejecutar la consulta en ese caso (bloque 6.1).
+ */
+export function isIncoherentDateRange(filters: OfferListFilters): boolean {
+  return (
+    filters.dateFrom !== null &&
+    filters.dateTo !== null &&
+    filters.dateFrom > filters.dateTo
+  );
 }
 
 /**
- * Construye la condición de la consulta.
- *
- * `availableYears` solo se usa cuando se filtra por mes sin indicar año: en
- * ese caso la condición se expresa como la unión de los rangos de ese mes en
- * cada año con ofertas. Se resuelve así, y no con una función SQL sobre la
- * columna, para que PostgreSQL pueda seguir usando el índice de `offer_date`.
+ * Rango inclusivo `[desde, hasta]` en UTC para el filtro de fecha de oferta
+ * (bloque 6.1). Sin ninguno de los dos límites, no se aplica ninguna
+ * restricción de fecha. `hasta` se interpreta como final del día indicado
+ * (`< hasta + 1 día`), para que ese día completo quede incluido.
  */
+function offerDateRangeFilter(
+  dateFrom: string | null,
+  dateTo: string | null,
+): Prisma.DateTimeFilter | undefined {
+  if (dateFrom === null && dateTo === null) {
+    return undefined;
+  }
+
+  const filter: Prisma.DateTimeFilter = {};
+  if (dateFrom !== null) {
+    filter.gte = fromDateInputValue(dateFrom);
+  }
+  if (dateTo !== null) {
+    const exclusiveEnd = fromDateInputValue(dateTo);
+    exclusiveEnd.setUTCDate(exclusiveEnd.getUTCDate() + 1);
+    filter.lt = exclusiveEnd;
+  }
+  return filter;
+}
+
 /**
  * Restricción de visibilidad aplicada a **toda** consulta de ofertas.
  *
@@ -702,7 +698,6 @@ export function offerScopeWhere(user: AuthenticatedUser): Prisma.OfferWhereInput
 
 export function buildOfferWhere(
   filters: OfferListFilters,
-  availableYears: readonly number[],
   user: AuthenticatedUser,
 ): Prisma.OfferWhereInput {
   const conditions: Prisma.OfferWhereInput[] = [offerScopeWhere(user)];
@@ -718,29 +713,14 @@ export function buildOfferWhere(
     });
   }
 
-  if (filters.year !== null) {
-    const offerDate = dateRangeFilter(filters.year, filters.month);
-    if (offerDate) {
-      conditions.push({ offerDate });
-    }
-  } else if (filters.month !== null) {
-    const monthRanges = availableYears
-      .map((year) => dateRangeFilter(year, filters.month))
-      .filter((range): range is Prisma.DateTimeFilter => range !== undefined)
-      .map((offerDate) => ({ offerDate }));
-    // Sin años con datos, ninguna oferta puede cumplir el filtro.
-    conditions.push(
-      monthRanges.length > 0 ? { OR: monthRanges } : { id: { in: [] } },
-    );
+  const offerDate = offerDateRangeFilter(filters.dateFrom, filters.dateTo);
+  if (offerDate) {
+    conditions.push({ offerDate });
   }
 
-  const where: Prisma.OfferWhereInput = {
-    // Archivo lógico (DEC-016): el listado ordinario excluye las archivadas y
-    // la vista «Ofertas archivadas» muestra exactamente esas.
-    deletedAt: filters.scope === "archivadas" ? { not: null } : null,
-  };
-
-  where.AND = conditions;
+  // Sin concepto de archivo funcional (DEV-005): no se filtra nunca por el
+  // antiguo `deletedAt`. Todas las ofertas accesibles son siempre buscables.
+  const where: Prisma.OfferWhereInput = { AND: conditions };
 
   if (filters.clientId) {
     where.clientId = filters.clientId;
@@ -751,8 +731,8 @@ export function buildOfferWhere(
   if (filters.projectManagerId) {
     where.projectManagerId = filters.projectManagerId;
   }
-  if (filters.statusId) {
-    where.statusId = filters.statusId;
+  if (filters.statusIds.length > 0) {
+    where.statusId = { in: filters.statusIds };
   }
   if (filters.offerTypeId) {
     where.offerTypeId = filters.offerTypeId;
@@ -810,11 +790,7 @@ export async function getOffersPage(
   filters: OfferListFilters,
   user: AuthenticatedUser,
 ): Promise<OfferListResult> {
-  // Solo hace falta conocer los años con datos cuando se filtra por mes sin
-  // año; en el resto de casos no se lanza esta consulta.
-  const availableYears =
-    filters.month !== null && filters.year === null ? await getOfferYears() : [];
-  const where = buildOfferWhere(filters, availableYears, user);
+  const where = buildOfferWhere(filters, user);
 
   const [total, amountAggregate, daysAggregate] = await Promise.all([
     prisma.offer.count({ where }),
@@ -870,17 +846,6 @@ export async function getOffersPage(
   };
 }
 
-/** Años distintos con ofertas no eliminadas, de más reciente a más antiguo. */
-export async function getOfferYears(): Promise<number[]> {
-  const rows = await prisma.$queryRaw<Array<{ year: number }>>`
-    SELECT DISTINCT EXTRACT(YEAR FROM "offer_date")::int AS year
-      FROM "offers"
-     WHERE "deleted_at" IS NULL
-     ORDER BY year DESC
-  `;
-  return rows.map((row) => row.year);
-}
-
 export type OfferFilterOptions = {
   clients: SelectOption[];
   commercials: SelectOption[];
@@ -888,7 +853,6 @@ export type OfferFilterOptions = {
   statuses: SelectOption[];
   offerTypes: SelectOption[];
   origins: SelectOption[];
-  years: number[];
 };
 
 /**
@@ -897,7 +861,7 @@ export type OfferFilterOptions = {
  * ofertas históricas que los referencian.
  */
 export async function getOfferFilterOptions(): Promise<OfferFilterOptions> {
-  const [clients, commercials, projectManagers, statuses, offerTypes, origins, years] =
+  const [clients, commercials, projectManagers, statuses, offerTypes, origins] =
     await Promise.all([
       prisma.client.findMany({ select: CATALOG_SELECT, orderBy: { name: "asc" } }),
       prisma.person.findMany({
@@ -913,7 +877,6 @@ export async function getOfferFilterOptions(): Promise<OfferFilterOptions> {
       prisma.offerStatus.findMany({ select: CATALOG_SELECT, orderBy: CATALOG_ORDER }),
       prisma.offerType.findMany({ select: CATALOG_SELECT, orderBy: CATALOG_ORDER }),
       prisma.origin.findMany({ select: CATALOG_SELECT, orderBy: CATALOG_ORDER }),
-      getOfferYears(),
     ]);
 
   return {
@@ -923,7 +886,6 @@ export async function getOfferFilterOptions(): Promise<OfferFilterOptions> {
     statuses: toOptions(statuses),
     offerTypes: toOptions(offerTypes),
     origins: toOptions(origins),
-    years,
   };
 }
 
@@ -933,17 +895,15 @@ export async function getOfferFilterOptions(): Promise<OfferFilterOptions> {
 
 /**
  * Misma condición que usa el listado, expuesta para que la exportación aplique
- * **exactamente** los mismos filtros, el mismo ámbito normal/archivado y los
- * mismos permisos. Se comparte en lugar de duplicarse para que no puedan
+ * **exactamente** los mismos filtros y los mismos permisos. Se comparte en
+ * lugar de duplicarse para que no puedan
  * divergir.
  */
 export async function buildExportWhere(
   filters: OfferListFilters,
   user: AuthenticatedUser,
 ): Promise<Prisma.OfferWhereInput> {
-  const availableYears =
-    filters.month !== null && filters.year === null ? await getOfferYears() : [];
-  return buildOfferWhere(filters, availableYears, user);
+  return buildOfferWhere(filters, user);
 }
 
 /** Orden determinista de la exportación, coherente con el del listado. */
@@ -1009,7 +969,6 @@ export function parsePendingReviewFilters(
  *   duplicados**: cada oferta aparece una sola vez, con el tipo que
  *   corresponde a su estado.
  * - Un administrador ve todas y puede filtrarlas.
- * - Las ofertas archivadas no aparecen en la bandeja activa.
  */
 export async function getPendingReviewOffers(
   user: AuthenticatedUser,
@@ -1049,10 +1008,7 @@ export async function getPendingReviewOffers(
     return [];
   }
 
-  const where: Prisma.OfferWhereInput = {
-    deletedAt: null,
-    OR: branches,
-  };
+  const where: Prisma.OfferWhereInput = { OR: branches };
 
   if (filters.commercialId) {
     where.commercialId = filters.commercialId;

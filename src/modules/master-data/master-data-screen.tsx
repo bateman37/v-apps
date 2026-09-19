@@ -19,10 +19,10 @@ import {
 import type { MasterDataGroup } from "@/modules/master-data/data";
 
 /**
- * Administración de los ocho catálogos del Gestor de Ofertas.
+ * Administración de los siete catálogos del Gestor de Ofertas.
  *
- * Los ocho comparten la misma tarjeta, el mismo formulario de alta y la misma
- * fila editable: no hay ocho implementaciones duplicadas.
+ * Los siete comparten la misma tarjeta, el mismo formulario de alta y la misma
+ * fila editable: no hay siete implementaciones duplicadas.
  */
 export function MasterDataScreen({
   groups,

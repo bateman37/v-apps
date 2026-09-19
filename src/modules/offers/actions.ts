@@ -127,7 +127,6 @@ type CurrentOffer = {
   offerTypeId: string;
   statusId: string;
   segmentationId: string | null;
-  languageId: string | null;
   cancellationReasonId: string | null;
 };
 
@@ -178,14 +177,6 @@ async function validateAgainstDatabase(
         currentId: current?.segmentationId ?? null,
         lookup: (id) =>
           prisma.segmentation.findUnique({ where: { id }, select: { isActive: true } }),
-      },
-      {
-        field: "languageId",
-        label: "El idioma",
-        id: data.languageId,
-        currentId: current?.languageId ?? null,
-        lookup: (id) =>
-          prisma.language.findUnique({ where: { id }, select: { isActive: true } }),
       },
       {
         field: "cancellationReasonId",
@@ -295,7 +286,6 @@ function toOfferScalarData(data: ValidatedOffer) {
       : null,
     segmentationId: data.segmentationId,
     notes: data.notes,
-    languageId: data.languageId,
     navisionOrder: data.navisionOrder,
     cancellationReasonId: data.cancellationReasonId,
   };
@@ -326,7 +316,6 @@ function auditSnapshot(data: ValidatedOffer): Record<string, unknown> {
     offerTypeId: data.offerTypeId,
     statusId: data.statusId,
     segmentationId: data.segmentationId,
-    languageId: data.languageId,
     cancellationReasonId: data.cancellationReasonId,
     offerDate: data.offerDate,
     description: data.description,
@@ -581,7 +570,6 @@ export async function updateOfferAction(
       select: {
         id: true,
         number: true,
-        deletedAt: true,
         createdById: true,
         clientId: true,
         priorityId: true,
@@ -591,7 +579,6 @@ export async function updateOfferAction(
         offerTypeId: true,
         statusId: true,
         segmentationId: true,
-        languageId: true,
         cancellationReasonId: true,
         offerDate: true,
         description: true,
@@ -613,17 +600,6 @@ export async function updateOfferAction(
     if (!current || !canAccessOffer(user, current)) {
       return errorState(
         { _form: "La oferta ya no está disponible. Vuelve al listado y recarga la página." },
-        values,
-        previousState,
-      );
-    }
-
-    if (current.deletedAt !== null) {
-      return errorState(
-        {
-          _form:
-            "Esta oferta está archivada y solo puede consultarse. Recupérala antes de modificar sus datos.",
-        },
         values,
         previousState,
       );
@@ -683,7 +659,6 @@ type AuditBeforeSource = {
   offerTypeId: string;
   statusId: string;
   segmentationId: string | null;
-  languageId: string | null;
   cancellationReasonId: string | null;
   offerDate: Date;
   description: string;
@@ -709,7 +684,6 @@ function buildAuditBefore(current: AuditBeforeSource): Record<string, unknown> {
     offerTypeId: current.offerTypeId,
     statusId: current.statusId,
     segmentationId: current.segmentationId,
-    languageId: current.languageId,
     cancellationReasonId: current.cancellationReasonId,
     offerDate: current.offerDate.toISOString().slice(0, 10),
     description: current.description,
@@ -936,106 +910,6 @@ export async function addOfferCommentAction(
 }
 
 // ---------------------------------------------------------------------------
-// Archivo lógico y recuperación
-// ---------------------------------------------------------------------------
-
-/**
- * Archiva una oferta (eliminación lógica, `DEC-016`).
- *
- * Archivar **no** cambia el estado de negocio ni borra nada: la oferta
- * desaparece del listado ordinario, conserva su número, sus jornadas, su
- * histórico, sus versiones, sus comentarios, sus adjuntos y sus
- * notificaciones, y puede recuperarse en cualquier momento.
- */
-export async function archiveOfferAction(
-  _previousState: OfferActionState,
-  formData: FormData,
-): Promise<OfferActionState> {
-  return setOfferArchived(formData, true);
-}
-
-/** Recupera una oferta archivada, devolviéndola al listado ordinario. */
-export async function restoreOfferAction(
-  _previousState: OfferActionState,
-  formData: FormData,
-): Promise<OfferActionState> {
-  return setOfferArchived(formData, false);
-}
-
-async function setOfferArchived(
-  formData: FormData,
-  archive: boolean,
-): Promise<OfferActionState> {
-  const user = await requireUser();
-  const offerId = readString(formData, "offerId");
-
-  if (!offerId) {
-    return actionError({ _form: "No se ha podido identificar la oferta." });
-  }
-
-  try {
-    const offer = await prisma.offer.findUnique({
-      where: { id: offerId },
-      select: {
-        id: true,
-        number: true,
-        deletedAt: true,
-        createdById: true,
-        commercialId: true,
-        projectManagerId: true,
-      },
-    });
-
-    if (!offer || !canAccessOffer(user, offer)) {
-      return actionError({ _form: "La oferta ya no está disponible." });
-    }
-
-    const alreadyInTargetState = archive
-      ? offer.deletedAt !== null
-      : offer.deletedAt === null;
-
-    if (alreadyInTargetState) {
-      return actionError({
-        _form: archive
-          ? "La oferta ya estaba archivada."
-          : "La oferta no está archivada.",
-      });
-    }
-
-    await prisma.$transaction(async (tx) => {
-      const now = new Date();
-      await tx.offer.update({
-        where: { id: offerId },
-        data: archive
-          ? { deletedAt: now, archivedById: user.id }
-          : { deletedAt: null, restoredAt: now, restoredById: user.id },
-      });
-
-      await recordAudit(tx, {
-        entityType: "Offer",
-        entityId: offerId,
-        action: archive ? "ARCHIVE" : "RESTORE",
-        actorId: user.id,
-        changes: {
-          archivada: { antes: !archive, despues: archive },
-          numero: offer.number,
-        },
-      });
-    });
-  } catch (error) {
-    return actionError({ _form: toSafeErrorMessage(error) });
-  }
-
-  revalidatePath("/offers");
-  revalidatePath(`/offers/${offerId}`);
-  return actionSuccess(
-    archive
-      ? "Oferta archivada. No se ha borrado nada: puedes consultarla y recuperarla desde «Ofertas archivadas»."
-      : "Oferta recuperada con el mismo número y los mismos datos.",
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Revisión
 // ---------------------------------------------------------------------------
 
@@ -1080,7 +954,6 @@ export async function reviewOfferAction(
         id: true,
         number: true,
         statusId: true,
-        deletedAt: true,
         navisionOrder: true,
         createdById: true,
         commercialId: true,
@@ -1090,11 +963,6 @@ export async function reviewOfferAction(
 
     if (!offer || !canAccessOffer(user, offer)) {
       return actionError({ _form: "La oferta ya no está disponible." });
-    }
-    if (offer.deletedAt !== null) {
-      return actionError({
-        _form: "La oferta está archivada. Recupérala antes de revisarla.",
-      });
     }
     if (expectedStatusId && offer.statusId !== expectedStatusId) {
       return actionError({

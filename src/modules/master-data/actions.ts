@@ -26,7 +26,7 @@ import {
 import { requireAdmin } from "@/modules/auth/session";
 
 /**
- * Administración de los ocho catálogos del Gestor de Ofertas.
+ * Administración de los siete catálogos del Gestor de Ofertas.
  *
  * Reglas comunes:
  *
