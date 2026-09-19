@@ -27,7 +27,6 @@ const CONDITION_FIELD_OPTIONS: Array<{ value: string; label: string }> = [
   { value: "COMMERCIAL", label: "Comercial" },
   { value: "CREATOR", label: "Creador" },
   { value: "CLIENT", label: "Cliente" },
-  { value: "ARCHIVED", label: "Archivada" },
 ];
 
 const RECIPIENT_OPTIONS: Array<{ value: string; label: string }> = [
@@ -40,6 +39,29 @@ const RECIPIENT_OPTIONS: Array<{ value: string; label: string }> = [
 ];
 
 const ROW_COUNT = 4;
+
+/**
+ * Recalcula las filas visibles de un bloque progresivo (bloque 8) a partir de
+ * los valores actuales: conserva únicamente los valores no vacíos, en orden,
+ * y añade exactamente una fila vacía al final salvo que ya se haya alcanzado
+ * el máximo. Es una función pura, comprobable sin React (ver bloque 12).
+ *
+ * - Empieza mostrando una única fila vacía.
+ * - Completar la última fila vacía visible añade la siguiente.
+ * - Vaciar una fila la retira, compactando las posteriores sin perder las
+ *   demás filas con valor.
+ * - Nunca hay más de una fila vacía visible, ni más de `max` filas en total.
+ */
+export function nextProgressiveRowValues(
+  values: readonly string[],
+  max: number,
+): string[] {
+  const filled = values.filter((value) => value !== "");
+  if (filled.length >= max) {
+    return filled.slice(0, max);
+  }
+  return [...filled, ""];
+}
 
 export function NotificationRulesScreen({
   rules,
@@ -128,6 +150,21 @@ function RuleSummary({
 function RuleForm({ action, options }: { action: AdminAction; options: RuleFormOptions }) {
   const [state, formAction] = useActionState(action, INITIAL_ADMIN_ACTION_STATE);
 
+  const [allFields, setAllFields] = useState<string[]>([""]);
+  const [anyFields, setAnyFields] = useState<string[]>([""]);
+  const [actionKinds, setActionKinds] = useState<string[]>([""]);
+
+  function updateAt(
+    values: string[],
+    setValues: (next: string[]) => void,
+    index: number,
+    value: string,
+  ) {
+    const next = values.slice();
+    next[index] = value;
+    setValues(nextProgressiveRowValues(next, ROW_COUNT));
+  }
+
   return (
     <form action={formAction} noValidate className="flex flex-col gap-4">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -157,8 +194,15 @@ function RuleForm({ action, options }: { action: AdminAction; options: RuleFormO
           Cumplir TODAS las condiciones
         </legend>
         <div className="flex flex-col gap-2">
-          {Array.from({ length: ROW_COUNT }).map((_, index) => (
-            <ConditionRow key={index} prefix="condition_all" index={index} options={options} />
+          {allFields.map((field, index) => (
+            <ConditionRow
+              key={index}
+              prefix="condition_all"
+              index={index}
+              options={options}
+              field={field}
+              onFieldChange={(value) => updateAt(allFields, setAllFields, index, value)}
+            />
           ))}
         </div>
       </fieldset>
@@ -168,8 +212,15 @@ function RuleForm({ action, options }: { action: AdminAction; options: RuleFormO
           Cumplir CUALQUIERA de las condiciones
         </legend>
         <div className="flex flex-col gap-2">
-          {Array.from({ length: ROW_COUNT }).map((_, index) => (
-            <ConditionRow key={index} prefix="condition_any" index={index} options={options} />
+          {anyFields.map((field, index) => (
+            <ConditionRow
+              key={index}
+              prefix="condition_any"
+              index={index}
+              options={options}
+              field={field}
+              onFieldChange={(value) => updateAt(anyFields, setAnyFields, index, value)}
+            />
           ))}
         </div>
       </fieldset>
@@ -179,8 +230,14 @@ function RuleForm({ action, options }: { action: AdminAction; options: RuleFormO
           Destinatarios
         </legend>
         <div className="flex flex-col gap-2">
-          {Array.from({ length: ROW_COUNT }).map((_, index) => (
-            <ActionRow key={index} index={index} people={options.people} />
+          {actionKinds.map((kind, index) => (
+            <ActionRow
+              key={index}
+              index={index}
+              people={options.people}
+              kind={kind}
+              onKindChange={(value) => updateAt(actionKinds, setActionKinds, index, value)}
+            />
           ))}
         </div>
       </fieldset>
@@ -210,20 +267,22 @@ function ConditionRow({
   prefix,
   index,
   options,
+  field,
+  onFieldChange,
 }: {
   prefix: "condition_all" | "condition_any";
   index: number;
   options: RuleFormOptions;
+  field: string;
+  onFieldChange: (value: string) => void;
 }) {
-  const [field, setField] = useState("");
-
   return (
     <div className="flex flex-wrap items-end gap-2">
       <select
         name={`${prefix}_${index}_field`}
         className="v-input sm:w-48"
         value={field}
-        onChange={(event) => setField(event.target.value)}
+        onChange={(event) => onFieldChange(event.target.value)}
         aria-label="Campo de la condición"
       >
         {CONDITION_FIELD_OPTIONS.map((option) => (
@@ -277,27 +336,28 @@ function ConditionRow({
           ))}
         </select>
       ) : null}
-
-      {field === "ARCHIVED" ? (
-        <select name={`${prefix}_${index}_value`} className="v-input sm:w-40" aria-label="Archivada" defaultValue="true">
-          <option value="true">Sí</option>
-          <option value="false">No</option>
-        </select>
-      ) : null}
     </div>
   );
 }
 
-function ActionRow({ index, people }: { index: number; people: RuleFormOptions["people"] }) {
-  const [kind, setKind] = useState("");
-
+function ActionRow({
+  index,
+  people,
+  kind,
+  onKindChange,
+}: {
+  index: number;
+  people: RuleFormOptions["people"];
+  kind: string;
+  onKindChange: (value: string) => void;
+}) {
   return (
     <div className="flex flex-wrap items-end gap-2">
       <select
         name={`action_${index}_kind`}
         className="v-input sm:w-64"
         value={kind}
-        onChange={(event) => setKind(event.target.value)}
+        onChange={(event) => onKindChange(event.target.value)}
         aria-label="Destinatario"
       >
         {RECIPIENT_OPTIONS.map((option) => (

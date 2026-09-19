@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { PublicShell } from "@/components/layout/app-shell";
 import { LoginForm } from "@/modules/auth/login-form";
+import { isAdmin } from "@/modules/auth/identity";
 import { getCurrentUser } from "@/modules/auth/session";
 
 const MOTIVOS: Record<string, string> = {
@@ -15,13 +16,16 @@ export default async function LoginPage({
 }) {
   const user = await getCurrentUser();
   if (user) {
-    redirect("/offers");
+    redirect(isAdmin(user) ? "/offers" : "/notificaciones");
   }
 
   const params = await searchParams;
   const notice = params.motivo ? MOTIVOS[params.motivo] : undefined;
+  // Sin `redirectTo` explícito, no se fija aquí un destino por defecto: el
+  // rol todavía no se conoce antes de iniciar sesión. `loginAction` decide el
+  // destino según el rol una vez autenticado (bloque 9).
   const redirectTo =
-    params.redirectTo && params.redirectTo.startsWith("/") ? params.redirectTo : "/offers";
+    params.redirectTo && params.redirectTo.startsWith("/") ? params.redirectTo : "";
 
   return (
     <PublicShell>
