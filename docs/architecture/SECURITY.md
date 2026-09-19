@@ -23,29 +23,34 @@ El Excel legado del Gestor de Ofertas contiene parámetros técnicos y credencia
 
 Ningún error de PostgreSQL se muestra tal cual en la interfaz. `src/lib/db/errors.ts` traduce los errores conocidos de Prisma a mensajes en español (registro duplicado, referencia inexistente, base de datos no disponible) y devuelve un mensaje genérico para el resto. El detalle técnico —que podría contener la cadena de conexión, el SQL ejecutado o una traza— se registra únicamente en la consola del servidor de desarrollo.
 
-### Auditoría implementada (DEV-003)
+### Auditoría implementada
 
-`AuditLog` registra, dentro de la misma transacción que el dato auditado:
+`AuditLog` registra, dentro de la misma transacción que el dato auditado: alta y modificación de ofertas, cambios de estado, revisiones, archivo y recuperación, comentarios, alta y retirada de adjuntos, gestión de usuarios, reglas de notificación y ajustes del contador, además de lo ya existente desde DEV-003 (clientes, personas y catálogos).
 
-- Alta y modificación de ofertas, y cambio de estado como evento propio.
-- Alta, modificación y activación/desactivación de clientes, personas y registros de los ocho catálogos.
+Cada entrada guarda el tipo de entidad, el identificador, la acción, la fecha, el actor (desde DEV-004) y una representación estructurada de los campos que cambian (`{ campo: { antes, despues } }`). Solo se guardan valores de negocio: nunca credenciales, contraseñas, hashes, tokens de sesión, cookies, contenido binario ni rutas físicas del servidor.
 
-Cada entrada guarda el tipo de entidad, el identificador, la acción, la fecha y una representación estructurada de los campos que cambian (`{ campo: { antes, despues } }`). Solo se guardan valores de negocio: nunca credenciales, cadenas de conexión ni detalles técnicos del motor.
+**Registros anteriores al login**: los eventos creados antes de DEV-004 conservan `actorId = null` y se muestran como «Usuario no disponible (registro anterior al login)». No se reescribe el pasado ni se inventa un actor.
 
-**Limitación conocida de atribución**: mientras no exista autenticación, `actorId` es siempre `null`, tanto en `AuditLog` como en `OfferStatusHistory`. No se inventa ningún usuario `admin`, `system` ni identidad temporal, de modo que en esta fase se sabe **qué** cambió y **cuándo**, pero no **quién** lo cambió. Quedan pendientes de auditar los ajustes del contador de numeración y las importaciones, porque todavía no existen.
+### Autenticación local provisional (DEV-004)
 
-### Administración sin autorización real (DEV-003)
+El Product Owner ha aprobado una autenticación local provisional, no el mecanismo corporativo definitivo (ver `DEC-019` y `DEC-056` en [`../decisions/DECISIONS.md`](../decisions/DECISIONS.md)):
 
-Las pantallas `/admin/clients`, `/admin/people` y `/admin/master-data` permiten modificar los maestros y **no tienen ninguna restricción de acceso**: cualquiera que abra la aplicación puede usarlas. Cada una muestra un aviso explícito. La restricción real a administradores depende de `DEC-055` y `DEC-056`, ambas pendientes. No se ha creado ningún administrador temporal ni ningún bypass de autenticación.
+- **Contraseñas**: hash con `scrypt` (parámetros de coste embebidos en el propio hash, sal aleatoria de 16 bytes, comparación en tiempo constante). Nunca se guarda la contraseña en claro, ni se envía el hash al cliente, ni se registra en auditoría o logs.
+- **Sesión**: token aleatorio de 256 bits; solo se persiste su hash SHA-256. Viaja en una cookie `HttpOnly`, `SameSite=Lax` y `Secure` en producción. Cerrar sesión borra la fila; un usuario desactivado pierde sus sesiones de inmediato.
+- **Autorización**: cada página protegida llama a `requireUser()`/`requireAdmin()`, y cada Server Action vuelve a comprobar la sesión y el permiso — nunca se confía en que la interfaz oculte un botón. `canAccessOffer` aplica el mismo criterio (DEC-055) en el listado, la ficha, las mutaciones, los adjuntos y la exportación.
+- **Administrador inicial**: `scripts/bootstrap-admin.ts` crea la cuenta a partir de variables de entorno (`ADMIN_BOOTSTRAP_USERNAME`/`ADMIN_BOOTSTRAP_PASSWORD`), nunca embebidas en el código; es idempotente y nunca restablece una contraseña ya establecida. La primera contraseña obliga a cambiarla en el primer acceso.
+- **Contraseñas temporales**: solo se muestran una vez, en el resultado inmediato de la acción que las genera (`/admin/users`); no se guardan para poder volver a mostrarlas.
+- **Mensajes de login**: siempre el mismo mensaje genérico, exista o no la cuenta, con un coste de verificación equivalente en ambos casos, para no revelar qué usuarios existen.
 
-### Autenticación pospuesta (decisión temporal aprobada)
+**La aplicación sigue siendo únicamente apta para desarrollo local**, ahora con el aviso `Entorno local · autenticación local provisional`. No debe exponerse en una red accesible ni usarse con datos reales de clientes o empleados hasta que exista un mecanismo de autenticación corporativo definitivo (`DEC-056`, pendiente) y una infraestructura de despliegue aprobada (`DEC-057`, pendiente).
 
-El Product Owner ha decidido posponer la autenticación (ver `DEC-019` en [`../decisions/DECISIONS.md`](../decisions/DECISIONS.md)). Mientras esta decisión siga vigente:
+### Adjuntos de oferta (DEV-004)
 
-- La aplicación no implementa login, usuarios, contraseñas, sesiones ni roles.
-- No existe ningún usuario administrador temporal ni bypass de autenticación.
-- La interfaz muestra de forma visible el aviso `Entorno local · autenticación pendiente`.
-- **La aplicación es únicamente apta para desarrollo local.** No debe exponerse en una red accesible ni usarse en producción, ni conectarse a datos reales de clientes o empleados, hasta que exista un mecanismo definitivo de autenticación y autorización (decisión pendiente `DEC-056`).
+- El directorio de almacenamiento se configura por variable de entorno (`ATTACHMENTS_STORAGE_PATH`), vive fuera de `public/` y nunca se expone al cliente.
+- El nombre físico es un identificador aleatorio, nunca el nombre original: evita colisiones, nombres reservados y cualquier intento de recorrido de rutas a partir de un nombre hostil.
+- Se valida en servidor tamaño (máximo 25 MB), extensión y, cuando es fiable, el tipo MIME; nunca se confía solo en lo que declara el navegador.
+- La descarga pasa siempre por una ruta autenticada y autorizada (`canAccessOffer`) que hace streaming del contenido, con cabeceras `Content-Disposition`, `X-Content-Type-Options: nosniff` y `Cache-Control: private, no-store`; nunca se sirve como archivo estático.
+- Si la base de datos falla después de escribir el fichero, el fichero se elimina para no dejar un binario huérfano sin metadatos que lo referencien.
 
 ## Relación con la migración de datos
 

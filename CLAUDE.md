@@ -27,15 +27,18 @@
 
 ## Estado de la implementación
 
-El repositorio **contiene código de aplicación** desde DEV-002 y, desde DEV-003, el primer flujo operativo completo del Gestor de Ofertas:
+El repositorio **contiene código de aplicación** desde DEV-002 y, desde DEV-004, el Gestor de Ofertas está funcionalmente cerrado sobre autenticación local:
 
 - Next.js (App Router) con React y TypeScript estricto, Tailwind CSS y Prisma sobre PostgreSQL.
-- Modelo transaccional completo del módulo: `Client`, `Person`, `Offer`, `OfferProfileDays`, `OfferStatusHistory`, `SystemCounter` y `AuditLog`, además de los ocho catálogos de referencia.
-- Listado, alta, consulta y modificación de ofertas, con numeración global segura ante concurrencia.
-- Administración de clientes, personas y los ocho catálogos.
+- Autenticación local provisional (`User`, `Session`, roles `ADMIN`/`USER`), con `requireUser`/`requireAdmin` y `canAccessOffer` comprobados en cada página y cada Server Action.
+- Modelo transaccional completo del módulo: `Client` (con código obligatorio), `Person`, `Offer`, `OfferProfileDays`, `OfferStatusHistory`, `OfferVersion`, `OfferComment`, `OfferAttachment`, `SystemCounter`, `AuditLog`, `NotificationRule`/`Notification`, además de los ocho catálogos de referencia.
+- Listado, alta, consulta, modificación, archivo/recuperación y exportación a Excel de ofertas, con numeración global segura ante concurrencia.
+- Comentarios, adjuntos, versiones y auditoría atribuible en la ficha de cada oferta.
+- Bandeja «Pendiente de revisión» y centro de notificaciones internas, con reglas configurables desde Administración.
+- Administración de clientes, personas, los ocho catálogos, usuarios, reglas de notificación y el contador de numeración.
 - Identidad visual oficial de Vincle aplicada mediante tokens (ver [`docs/design/BRAND_UI.md`](docs/design/BRAND_UI.md)).
 
-**No** existen todavía: autenticación, autorización, Docker, infraestructura de despliegue, migración del histórico, exportación a Excel, correos, adjuntos ni ningún módulo distinto del Gestor de Ofertas. La aplicación es únicamente apta para desarrollo local (`DEC-019`).
+**No** existen todavía: SSO ni ningún proveedor de autenticación corporativo definitivo, envío real de email, Docker, infraestructura de despliegue, migración del histórico, ni ningún módulo distinto del Gestor de Ofertas. La aplicación es únicamente apta para desarrollo local (`DEC-019`).
 
 Ver el estado exacto y el siguiente objetivo en [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md).
 

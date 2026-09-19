@@ -2,6 +2,30 @@
 
 Registro de entregas realizadas sobre `v-apps`. Cada entrada resume el objetivo y el resultado de una entrega, con enlace al prompt que la originó.
 
+## [Sin versionar] — Cierre funcional del Gestor de Ofertas, autenticación local y notificaciones
+
+- **Prompt**: [`prompts/0004-cierre-gestor-ofertas-autenticacion-notificaciones.md`](prompts/0004-cierre-gestor-ofertas-autenticacion-notificaciones.md)
+- **Tipo**: entrega funcional grande, agrupa piezas interdependientes en una única Pull Request.
+- **Resumen**:
+  - **Corrección del formulario de oferta**: tras cualquier error del servidor se recuperan y se vuelven a mostrar todos los valores enviados, incluidas las jornadas de todos los perfiles.
+  - **Código de cliente** (`Client.code`) obligatorio y único, con migración compatible (nullable) para los clientes de DEV-003 y aviso «Código pendiente».
+  - **Autenticación local provisional**: `User`, `Session`, hash de contraseña con scrypt, cookie `HttpOnly`/`SameSite=Lax`, roles `ADMIN`/`USER`, `/login`, `/cuenta/contrasena`, `/admin/users` y `scripts/bootstrap-admin.ts`. Corrige de paso una brecha real: las acciones de administración de clientes, personas y catálogos heredadas de DEV-003 no exigían `ADMIN` ni atribuían auditoría.
+  - **Auditoría atribuible y versiones inmutables** de oferta (`OfferVersion`), con comparación de campos y jornadas.
+  - **Comentarios internos** (`OfferComment`) y **adjuntos locales** (`OfferAttachment`, `src/lib/storage.ts`), con validación de tamaño/extensión/MIME, almacenamiento fuera de `public/` y descarga autenticada por streaming.
+  - **Archivo lógico y recuperación** de ofertas, con vista «Ofertas archivadas» que comparte filtros y exportación con el listado ordinario.
+  - **Bandeja «Pendiente de revisión»**, flujo de estados (cualquier estado activo a cualquier otro, salvo la restricción de completar una revisión) y pedido de Navision obligatorio en `Aceptado`.
+  - **Centro de notificaciones internas** y administración de reglas de notificación (`/admin/notification-rules`); el motor de evaluación y las tres reglas iniciales ya estaban en el seed, esta entrega añade la pantalla.
+  - **Exportación a Excel** del listado (`exceljs`), con las tres hojas `Ofertas`, `Jornadas` e `Historial`, reutilizando exactamente el mismo `where`/`orderBy` que el listado.
+  - **Administración protegida del contador** de numeración (`/admin/counter`, DEC-012).
+- **Modelo de datos añadido**: `User`, `Session`, `OfferVersion`, `OfferComment`, `OfferAttachment`, `NotificationRule`, `NotificationRuleCondition`, `NotificationRuleAction`, `Notification`, y `Client.code`.
+- **Migración**: `20260919160000_add_auth_versions_comments_attachments_notifications`, acumulativa y no destructiva.
+- **Decisiones cerradas**: `DEC-012`, `DEC-016`, `DEC-021` (código de cliente, nueva), `DEC-032`, `DEC-051`, `DEC-052`, `DEC-053` (parcial: sin email real), `DEC-055`. `DEC-019` deja de significar «sin autenticación» y pasa a describir la autenticación local provisional ya implementada.
+- **Dependencia añadida**: `exceljs`, para generar el `.xlsx` de exportación.
+- **Corrección de sesión**: `changeOwnPasswordAction` redirige explícitamente tras revocar y recrear la sesión, en lugar de devolver el estado en línea, para evitar un cierre de sesión involuntario detectado durante la validación con PostgreSQL real.
+- **Sigue pendiente**: proveedor de autenticación corporativa definitiva (`DEC-056`), infraestructura y despliegue (`DEC-057`), migración del histórico (`DEC-054`, `DEC-058`), modelo de implantaciones (`DEC-059`), tarifas y reglas de ESM (`DEC-060`), y proveedor real de email (`DEC-061`, nueva).
+- **Limitación explícita**: la pantalla dedicada de comparación de versiones (más allá del histórico de estados ya visible en la ficha) no tiene interfaz propia en esta entrega, aunque la Server Action y la consulta ya existen.
+- **Siguiente objetivo**: ver [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md).
+
 ## [Sin versionar] — Primer flujo operativo del Gestor de Ofertas y branding Vincle
 
 - **Prompt**: [`prompts/0003-flujo-operativo-ofertas-branding-vincle.md`](prompts/0003-flujo-operativo-ofertas-branding-vincle.md)

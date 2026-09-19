@@ -33,9 +33,17 @@ Ejemplo (sintético): `VI202609-01019`.
 - La carga inicial (`prisma/seed.ts`) crea el contador con valor `0` **solo si no existe**. Volver a ejecutar el seed nunca lo rebaja, reinicia ni sobrescribe.
 - Una modificación de la oferta jamás vuelve a tocar el número.
 
+### Administración del contador (DEV-004, DEC-012)
+
+`/admin/counter`, accesible solo para `ADMIN`, permite:
+
+- Ver si el contador existe y su valor actual (el último número **ya consumido**, no el próximo).
+- Inicializarlo explícitamente si falta.
+- Aumentarlo con confirmación reforzada que muestra el valor anterior y el nuevo; nunca permite reducirlo, y detecta un conflicto de concurrencia si el valor cambió entre que se mostró y que se confirmó.
+- Cada ajuste queda auditado con actor, valor anterior y valor nuevo.
+
 ### Todavía pendiente de implementar
 
-- La pantalla administrativa de ajuste del contador (`DEC-012`) **no** existe: sin autenticación no podría considerarse un área protegida.
 - La inicialización del contador con el último valor del Excel legado, en el corte definitivo, sigue pendiente y deberá hacerse antes de habilitar la creación de ofertas en producción.
 
 ## Jornadas por perfil
