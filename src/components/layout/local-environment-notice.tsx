@@ -1,9 +1,11 @@
 /**
- * Aviso discreto pero visible de que la autenticación está pospuesta
- * (decisión temporal aprobada `DEC-019`, ver docs/decisions/DECISIONS.md).
- * Esta aplicación es únicamente apta para desarrollo local y no debe
- * exponerse en una red accesible ni usarse en producción mientras no exista
- * autenticación y autorización.
+ * Aviso honesto sobre el estado de la autenticación.
+ *
+ * DEV-004 sustituye el antiguo «autenticación pendiente»: ahora existe un
+ * login local real, pero **no** es el mecanismo corporativo definitivo. El
+ * proveedor final (SSO o equivalente) sigue siendo una decisión pendiente
+ * (`DEC-056`), y la aplicación continúa siendo apta solo para uso local
+ * mientras no existan infraestructura ni despliegue aprobados (`DEC-057`).
  */
 export function LocalEnvironmentNotice() {
   return (
@@ -16,7 +18,7 @@ export function LocalEnvironmentNotice() {
         color: "var(--color-warning)",
       }}
     >
-      Entorno local · autenticación pendiente
+      Entorno local · autenticación local provisional
     </p>
   );
 }

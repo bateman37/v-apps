@@ -17,9 +17,12 @@ import {
   ORIGINS,
   PRIORITIES,
   PROFESSIONAL_PROFILES,
+  SEED_NOTIFICATION_RULES,
+  SEED_PEOPLE,
   SEGMENTATIONS,
   type SeedValue,
 } from "./seed-data";
+import { normalizeNameKey } from "../src/lib/text";
 
 const prisma = new PrismaClient();
 
@@ -64,6 +67,117 @@ async function ensureOfferNumberCounter() {
   );
 }
 
+/**
+ * Precarga idempotente de las personas operativas autorizadas (DEV-004).
+ *
+ * `Person` no tiene clave natural única en base de datos, así que la
+ * identificación se hace por nombre normalizado (espacios colapsados,
+ * minúsculas): es exactamente el criterio con el que Administración evita
+ * duplicados visibles, y basta para que repetir el seed no cree una segunda
+ * ficha de la misma persona.
+ *
+ * El seed **acumula** habilitaciones y nunca las retira: si alguien ha marcado
+ * a mano a un comercial también como PM, esa marca sobrevive. Tampoco
+ * desactiva ni modifica personas creadas por el usuario, ni asigna emails o
+ * cuentas.
+ */
+async function upsertSeedPeople() {
+  const existing = await prisma.person.findMany({
+    select: {
+      id: true,
+      name: true,
+      canBeCommercial: true,
+      canBeProjectManager: true,
+    },
+  });
+
+  const byNormalizedName = new Map(
+    existing.map((person) => [normalizeNameKey(person.name), person] as const),
+  );
+
+  let created = 0;
+  let updated = 0;
+
+  for (const seedPerson of SEED_PEOPLE) {
+    const key = normalizeNameKey(seedPerson.name);
+    const current = byNormalizedName.get(key);
+
+    if (!current) {
+      await prisma.person.create({
+        data: {
+          name: seedPerson.name,
+          canBeCommercial: seedPerson.canBeCommercial,
+          canBeProjectManager: seedPerson.canBeProjectManager,
+        },
+      });
+      created += 1;
+      continue;
+    }
+
+    // Unión de habilitaciones: nunca se quita una que ya estuviera puesta.
+    const canBeCommercial = current.canBeCommercial || seedPerson.canBeCommercial;
+    const canBeProjectManager =
+      current.canBeProjectManager || seedPerson.canBeProjectManager;
+
+    if (
+      canBeCommercial !== current.canBeCommercial ||
+      canBeProjectManager !== current.canBeProjectManager
+    ) {
+      await prisma.person.update({
+        where: { id: current.id },
+        data: { canBeCommercial, canBeProjectManager },
+      });
+      updated += 1;
+    }
+  }
+
+  console.log(
+    `  - Personas autorizadas: ${SEED_PEOPLE.length} verificadas (${created} creadas, ${updated} actualizadas; ninguna duplicada ni desactivada).`,
+  );
+}
+
+/**
+ * Reglas de notificación iniciales.
+ *
+ * Solo se crean las que faltan, identificadas por su `key` estable. Una regla
+ * que Administración haya renombrado, desactivado o ajustado **no** se
+ * sobrescribe: el seed no revierte decisiones del usuario.
+ */
+async function ensureInitialNotificationRules() {
+  let created = 0;
+
+  for (const rule of SEED_NOTIFICATION_RULES) {
+    const existing = await prisma.notificationRule.findUnique({
+      where: { key: rule.key },
+      select: { id: true },
+    });
+
+    if (existing) {
+      continue;
+    }
+
+    await prisma.notificationRule.create({
+      data: {
+        key: rule.key,
+        name: rule.name,
+        description: rule.description,
+        trigger: rule.trigger,
+        channel: "INTERNAL",
+        sortOrder: rule.sortOrder,
+        isActive: true,
+        actions: {
+          create: rule.recipients.map((kind) => ({ kind })),
+        },
+      },
+    });
+    created += 1;
+  }
+
+  console.log(
+    `  - Reglas de notificación iniciales: ${SEED_NOTIFICATION_RULES.length} verificadas (${created} creadas).`,
+  );
+}
+
 async function main() {
   console.log("Cargando maestros de referencia (idempotente)...");
 
@@ -96,9 +210,14 @@ async function main() {
     (args) => prisma.cancellationReason.upsert(args),
   );
 
+  await upsertSeedPeople();
+  await ensureInitialNotificationRules();
   await ensureOfferNumberCounter();
 
   console.log("Carga de maestros completada.");
+  console.log(
+    "Siguiente paso: crea el administrador inicial con `npm run auth:bootstrap-admin`.",
+  );
 }
 
 main()

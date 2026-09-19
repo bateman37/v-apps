@@ -1,30 +1,48 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { NAV_SECTIONS } from "@/components/layout/nav-items";
+import { usePathname, useSearchParams } from "next/navigation";
+import { visibleNavSections } from "@/components/layout/nav-items";
 
 /**
  * Navegación lateral con estado activo. Es un componente de cliente porque
- * necesita conocer la ruta actual (`usePathname`) para resaltar de forma
- * inequívoca la sección activa; el resto del layout se mantiene en servidor.
+ * necesita conocer la ruta actual para resaltar de forma inequívoca la sección
+ * activa; el resto del layout se mantiene en servidor.
  *
  * El enlace activo es el de coincidencia más larga, para que `/offers/new`
- * resalte «Nueva oferta» y no también «Todas las ofertas».
+ * resalte «Nueva oferta» y no también «Todas las ofertas». «Ofertas
+ * archivadas» y «Todas las ofertas» comparten ruta y se distinguen por el
+ * parámetro `scope`.
  */
-export function SidebarNav() {
+export function SidebarNav({ isAdmin }: { isAdmin: boolean }) {
   const pathname = usePathname() ?? "";
+  const searchParams = useSearchParams();
+  const isArchivedScope = searchParams?.get("scope") === "archivadas";
+  const sections = visibleNavSections(isAdmin);
 
-  const activeHref = NAV_SECTIONS.flatMap((section) => section.items)
-    .filter(
-      (item) => pathname === item.href || pathname.startsWith(`${item.href}/`),
-    )
+  const candidates = sections
+    .flatMap((section) => section.items)
+    .filter((item) => {
+      const [path] = item.href.split("?");
+      return pathname === path || pathname.startsWith(`${path}/`);
+    });
+
+  const activeHref = candidates
+    .filter((item) => {
+      if (item.href.includes("scope=archivadas")) {
+        return isArchivedScope;
+      }
+      if (item.href === "/offers") {
+        return !isArchivedScope;
+      }
+      return true;
+    })
     .map((item) => item.href)
-    .sort((left, right) => right.length - left.length)[0];
+    .sort((left, right) => right.split("?")[0].length - left.split("?")[0].length)[0];
 
   return (
     <nav aria-label="Navegación principal" className="flex flex-col gap-6">
-      {NAV_SECTIONS.map((section) => (
+      {sections.map((section) => (
         <div key={section.title}>
           <h2 className="px-3 pb-2 text-xs font-bold uppercase tracking-wide text-[var(--color-text-muted)]">
             {section.title}

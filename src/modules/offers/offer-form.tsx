@@ -1,7 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useMemo, useState, type ReactNode } from "react";
+import {
+  useActionState,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { Alert } from "@/components/ui/alert";
 import { fieldAria, FormField } from "@/components/ui/form-field";
 import { SubmitButton } from "@/components/ui/submit-button";
@@ -11,18 +18,38 @@ import {
   INITIAL_OFFER_FORM_STATE,
   type OfferFormState,
 } from "@/modules/offers/form-state";
-import type { OfferDetail, OfferFormOptions, SelectOption } from "@/modules/offers/data";
-import { profileDaysFieldName, type OfferFormValues } from "@/modules/offers/validation";
+import type {
+  OfferDetail,
+  OfferFormOptions,
+  SelectOption,
+} from "@/modules/offers/data";
+import {
+  emptyOfferFormValues,
+  profileDaysFieldName,
+  type OfferFormValues,
+} from "@/modules/offers/validation";
 
 /**
  * Formulario de oferta, compartido literalmente por el alta (`/offers/new`) y
  * la modificación (`/offers/[id]/edit`): mismas secciones, mismos campos y
- * mismas reglas. Es un componente de cliente porque necesita reaccionar al
- * estado seleccionado (para pedir el motivo de cancelación) y recalcular el
- * total de jornadas mientras se escribe.
+ * mismas reglas. La validación real vive en el servidor; lo que se hace aquí
+ * es solo ayuda inmediata al usuario.
  *
- * La validación real vive en el servidor: lo que se hace aquí es solo ayuda
- * inmediata al usuario.
+ * ## Por qué el formulario es enteramente controlado (corrección de DEV-004)
+ *
+ * La versión anterior mezclaba dos fuentes de verdad: la mayoría de los campos
+ * eran no controlados (`defaultValue`) mientras el estado y las jornadas vivían
+ * en `useState`. Al completar una Server Action, React reinicia el formulario;
+ * los campos no controlados volvían a su `defaultValue` mientras los
+ * controlados conservaban su `useState` inicial —vacío en el alta—, de modo que
+ * la interfaz y el `FormData` del siguiente envío podían divergir. Ese es el
+ * origen del error reproducido: un primer guardado llegaba al contador con el
+ * estado informado y el segundo intento fallaba con «El estado es obligatorio».
+ *
+ * Ahora hay **un único objeto de valores** en el estado del componente. Todos
+ * los controles lo leen y lo escriben, y cuando el servidor responde con un
+ * error se vuelcan los valores devueltos. Lo que se ve es exactamente lo que se
+ * enviará.
  */
 
 export type OfferFormAction = (
@@ -39,30 +66,7 @@ type OfferFormProps = {
 
 function initialValuesFrom(offer?: OfferDetail): OfferFormValues {
   if (!offer) {
-    return {
-      clientId: "",
-      implantationText: "",
-      priorityId: "",
-      originId: "",
-      commercialId: "",
-      projectManagerId: "",
-      offerDate: "",
-      description: "",
-      offerTypeId: "",
-      segmentationId: "",
-      requesterName: "",
-      languageId: "",
-      notes: "",
-      estimatedCommercialDeliveryDate: "",
-      estimatedClientDeliveryDate: "",
-      estimatedPortfolioDate: "",
-      commercialDays: "",
-      totalAmount: "",
-      statusId: "",
-      cancellationReasonId: "",
-      navisionOrder: "",
-      profileDays: {},
-    };
+    return emptyOfferFormValues();
   }
 
   const profileDays: Record<string, string> = {};
@@ -99,26 +103,62 @@ function initialValuesFrom(offer?: OfferDetail): OfferFormValues {
 export function OfferForm({ mode, action, options, offer }: OfferFormProps) {
   const initialValues = useMemo(() => initialValuesFrom(offer), [offer]);
   const [state, formAction] = useActionState(action, INITIAL_OFFER_FORM_STATE);
-  const values = state.values ?? initialValues;
+
+  const [values, setValues] = useState<OfferFormValues>(initialValues);
+  const lastAppliedSubmission = useRef(0);
+  const errorSummaryRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * Cuando el servidor devuelve un error, repone en el formulario **todos** los
+   * valores enviados: textos, importes, fechas, desplegables, estado, motivo de
+   * cancelación y jornadas por perfil. El testigo `submission` distingue una
+   * respuesta nueva de un simple repintado, de modo que lo que el usuario haya
+   * seguido escribiendo entretanto no se pisa sin motivo.
+   */
+  useEffect(() => {
+    if (state.submission > lastAppliedSubmission.current && state.values) {
+      lastAppliedSubmission.current = state.submission;
+      setValues(state.values);
+    }
+  }, [state.submission, state.values]);
+
+  const hasErrors = Object.keys(state.errors).length > 0;
+
+  /** Foco accesible al resumen de errores tras una respuesta con problemas. */
+  useEffect(() => {
+    if (state.status === "error" && state.submission > 0) {
+      errorSummaryRef.current?.focus();
+    }
+  }, [state.status, state.submission]);
+
+  function setValue<K extends keyof OfferFormValues>(
+    key: K,
+    value: OfferFormValues[K],
+  ) {
+    setValues((previous) => ({ ...previous, [key]: value }));
+  }
+
+  function setProfileDays(profileId: string, value: string) {
+    setValues((previous) => ({
+      ...previous,
+      profileDays: { ...previous.profileDays, [profileId]: value },
+    }));
+  }
+
   const errors = state.errors;
-
-  const [statusId, setStatusId] = useState(initialValues.statusId);
-  const [profileDays, setProfileDays] = useState<Record<string, string>>(
-    initialValues.profileDays,
-  );
-
-  const isCancelled = options.cancelledStatusIds.includes(statusId);
+  const isCancelled = options.cancelledStatusIds.includes(values.statusId);
+  const isAccepted = options.acceptedStatusIds.includes(values.statusId);
 
   const total = useMemo(() => {
     const parsedValues: string[] = [];
-    for (const raw of Object.values(profileDays)) {
+    for (const raw of Object.values(values.profileDays)) {
       const parsed = parseDecimal(raw, { scale: 2 });
       if (parsed.ok) {
         parsedValues.push(parsed.value);
       }
     }
     return sumDecimalStrings(parsedValues, 2);
-  }, [profileDays]);
+  }, [values.profileDays]);
 
   return (
     <form action={formAction} noValidate className="flex flex-col gap-6">
@@ -126,12 +166,25 @@ export function OfferForm({ mode, action, options, offer }: OfferFormProps) {
         <input type="hidden" name="offerId" value={offer.id} />
       ) : null}
 
-      {errors._form ? <Alert tone="error">{errors._form}</Alert> : null}
-
-      {state.status === "error" && !errors._form ? (
-        <Alert tone="error" title="Revisa el formulario">
-          Hay campos con errores. Cada problema se indica junto a su campo.
-        </Alert>
+      {state.status === "error" ? (
+        <div ref={errorSummaryRef} tabIndex={-1}>
+          <Alert
+            tone="error"
+            title={errors._form ? "No se ha podido guardar" : "Revisa el formulario"}
+          >
+            {errors._form ? (
+              <p>{errors._form}</p>
+            ) : (
+              <p>Hay campos con errores. Cada problema se indica junto a su campo.</p>
+            )}
+            {hasErrors ? (
+              <p className="mt-1">
+                Los datos que habías introducido se han conservado: corrige lo
+                indicado y vuelve a guardar sin rellenarlo todo de nuevo.
+              </p>
+            ) : null}
+          </Alert>
+        </div>
       ) : null}
 
       <Section title="Identificación">
@@ -141,13 +194,14 @@ export function OfferForm({ mode, action, options, offer }: OfferFormProps) {
             label="Cliente"
             required
             options={options.clients}
-            defaultValue={values.clientId}
+            value={values.clientId}
+            onChange={(value) => setValue("clientId", value)}
             error={errors.clientId}
             emptyLabel="Selecciona un cliente"
             emptyHint={
               options.clients.length === 0 ? (
                 <>
-                  No hay clientes activos.{" "}
+                  No hay clientes activos con código.{" "}
                   <Link className="v-link" href="/admin/clients">
                     Crea uno en Administración
                   </Link>
@@ -159,7 +213,8 @@ export function OfferForm({ mode, action, options, offer }: OfferFormProps) {
           <TextField
             id="implantationText"
             label="Implantación"
-            defaultValue={values.implantationText}
+            value={values.implantationText}
+            onChange={(value) => setValue("implantationText", value)}
             error={errors.implantationText}
             hint="Texto libre opcional. Todavía no existe un maestro de implantaciones."
           />
@@ -168,7 +223,8 @@ export function OfferForm({ mode, action, options, offer }: OfferFormProps) {
             label="Prioridad"
             required
             options={options.priorities}
-            defaultValue={values.priorityId}
+            value={values.priorityId}
+            onChange={(value) => setValue("priorityId", value)}
             error={errors.priorityId}
             emptyLabel="Selecciona una prioridad"
           />
@@ -177,7 +233,8 @@ export function OfferForm({ mode, action, options, offer }: OfferFormProps) {
             label="Origen"
             required
             options={options.origins}
-            defaultValue={values.originId}
+            value={values.originId}
+            onChange={(value) => setValue("originId", value)}
             error={errors.originId}
             emptyLabel="Selecciona un origen"
           />
@@ -186,7 +243,8 @@ export function OfferForm({ mode, action, options, offer }: OfferFormProps) {
             label="Comercial"
             required
             options={options.commercials}
-            defaultValue={values.commercialId}
+            value={values.commercialId}
+            onChange={(value) => setValue("commercialId", value)}
             error={errors.commercialId}
             emptyLabel="Selecciona un comercial"
             emptyHint={
@@ -206,7 +264,8 @@ export function OfferForm({ mode, action, options, offer }: OfferFormProps) {
             label="Project Manager"
             required
             options={options.projectManagers}
-            defaultValue={values.projectManagerId}
+            value={values.projectManagerId}
+            onChange={(value) => setValue("projectManagerId", value)}
             error={errors.projectManagerId}
             emptyLabel="Selecciona un Project Manager"
             emptyHint={
@@ -226,7 +285,8 @@ export function OfferForm({ mode, action, options, offer }: OfferFormProps) {
             label="Fecha de la oferta"
             type="date"
             required
-            defaultValue={values.offerDate}
+            value={values.offerDate}
+            onChange={(value) => setValue("offerDate", value)}
             error={errors.offerDate}
           />
         </Grid>
@@ -245,7 +305,8 @@ export function OfferForm({ mode, action, options, offer }: OfferFormProps) {
               name="description"
               rows={3}
               className="v-input"
-              defaultValue={values.description}
+              value={values.description}
+              onChange={(event) => setValue("description", event.target.value)}
               {...fieldAria("description", errors.description)}
             />
           </FormField>
@@ -256,7 +317,8 @@ export function OfferForm({ mode, action, options, offer }: OfferFormProps) {
               label="Tipo de oferta"
               required
               options={options.offerTypes}
-              defaultValue={values.offerTypeId}
+              value={values.offerTypeId}
+              onChange={(value) => setValue("offerTypeId", value)}
               error={errors.offerTypeId}
               emptyLabel="Selecciona un tipo"
             />
@@ -264,7 +326,8 @@ export function OfferForm({ mode, action, options, offer }: OfferFormProps) {
               id="segmentationId"
               label="Segmentación"
               options={options.segmentations}
-              defaultValue={values.segmentationId}
+              value={values.segmentationId}
+              onChange={(value) => setValue("segmentationId", value)}
               error={errors.segmentationId}
               emptyLabel="Sin segmentación"
             />
@@ -272,14 +335,16 @@ export function OfferForm({ mode, action, options, offer }: OfferFormProps) {
               id="requesterName"
               label="Nombre del solicitante"
               required
-              defaultValue={values.requesterName}
+              value={values.requesterName}
+              onChange={(value) => setValue("requesterName", value)}
               error={errors.requesterName}
             />
             <SelectField
               id="languageId"
               label="Idioma"
               options={options.languages}
-              defaultValue={values.languageId}
+              value={values.languageId}
+              onChange={(value) => setValue("languageId", value)}
               error={errors.languageId}
               emptyLabel="Sin idioma"
               emptyHint={
@@ -290,14 +355,20 @@ export function OfferForm({ mode, action, options, offer }: OfferFormProps) {
             />
           </Grid>
 
-          <FormField id="notes" label="Observaciones" error={errors.notes}>
+          <FormField
+            id="notes"
+            label="Observaciones"
+            error={errors.notes}
+            hint="Dato funcional de la oferta, versionado con ella. Para anotaciones con autor y fecha, usa el historial de comentarios de la ficha."
+          >
             <textarea
               id="notes"
               name="notes"
-              rows={3}
+              rows={4}
               className="v-input"
-              defaultValue={values.notes}
-              {...fieldAria("notes", errors.notes)}
+              value={values.notes}
+              onChange={(event) => setValue("notes", event.target.value)}
+              {...fieldAria("notes", errors.notes, true)}
             />
           </FormField>
         </div>
@@ -309,21 +380,24 @@ export function OfferForm({ mode, action, options, offer }: OfferFormProps) {
             id="estimatedCommercialDeliveryDate"
             label="Fecha estimada de entrega comercial"
             type="date"
-            defaultValue={values.estimatedCommercialDeliveryDate}
+            value={values.estimatedCommercialDeliveryDate}
+            onChange={(value) => setValue("estimatedCommercialDeliveryDate", value)}
             error={errors.estimatedCommercialDeliveryDate}
           />
           <TextField
             id="estimatedClientDeliveryDate"
             label="Fecha estimada de entrega al cliente"
             type="date"
-            defaultValue={values.estimatedClientDeliveryDate}
+            value={values.estimatedClientDeliveryDate}
+            onChange={(value) => setValue("estimatedClientDeliveryDate", value)}
             error={errors.estimatedClientDeliveryDate}
           />
           <TextField
             id="estimatedPortfolioDate"
             label="Fecha estimada de cartera"
             type="date"
-            defaultValue={values.estimatedPortfolioDate}
+            value={values.estimatedPortfolioDate}
+            onChange={(value) => setValue("estimatedPortfolioDate", value)}
             error={errors.estimatedPortfolioDate}
           />
         </Grid>
@@ -350,12 +424,9 @@ export function OfferForm({ mode, action, options, offer }: OfferFormProps) {
                   type="text"
                   inputMode="decimal"
                   className="v-input v-num"
-                  value={profileDays[profile.id] ?? ""}
+                  value={values.profileDays[profile.id] ?? ""}
                   onChange={(event) =>
-                    setProfileDays((previous) => ({
-                      ...previous,
-                      [profile.id]: event.target.value,
-                    }))
+                    setProfileDays(profile.id, event.target.value)
                   }
                   {...fieldAria(fieldName, error)}
                 />
@@ -369,7 +440,8 @@ export function OfferForm({ mode, action, options, offer }: OfferFormProps) {
             <TextField
               id="commercialDays"
               label="Jornadas comerciales"
-              defaultValue={values.commercialDays}
+              value={values.commercialDays}
+              onChange={(value) => setValue("commercialDays", value)}
               error={errors.commercialDays}
               inputMode="decimal"
               hint="Concepto separado: no se suma al total de jornadas por perfil."
@@ -394,7 +466,8 @@ export function OfferForm({ mode, action, options, offer }: OfferFormProps) {
             id="totalAmount"
             label="Importe total (€)"
             required
-            defaultValue={values.totalAmount}
+            value={values.totalAmount}
+            onChange={(value) => setValue("totalAmount", value)}
             error={errors.totalAmount}
             inputMode="decimal"
             hint="Usa coma o punto como separador decimal. 0,00 € es un valor válido."
@@ -404,8 +477,8 @@ export function OfferForm({ mode, action, options, offer }: OfferFormProps) {
               id="statusId"
               name="statusId"
               className="v-input"
-              value={statusId}
-              onChange={(event) => setStatusId(event.target.value)}
+              value={values.statusId}
+              onChange={(event) => setValue("statusId", event.target.value)}
               {...fieldAria("statusId", errors.statusId)}
             >
               <option value="">Selecciona un estado</option>
@@ -419,9 +492,15 @@ export function OfferForm({ mode, action, options, offer }: OfferFormProps) {
           <TextField
             id="navisionOrder"
             label="Pedido / identificador de Navision"
-            defaultValue={values.navisionOrder}
+            required={isAccepted}
+            value={values.navisionOrder}
+            onChange={(value) => setValue("navisionOrder", value)}
             error={errors.navisionOrder}
-            hint="Opcional en todos los estados mientras DEC-052 siga pendiente."
+            hint={
+              isAccepted
+                ? "Obligatorio con el estado «Aceptado» (DEC-052)."
+                : "Opcional salvo con el estado «Aceptado». Si se abandona ese estado, el valor ya informado no se borra."
+            }
           />
           {isCancelled ? (
             <SelectField
@@ -429,7 +508,8 @@ export function OfferForm({ mode, action, options, offer }: OfferFormProps) {
               label="Motivo de cancelación"
               required
               options={options.cancellationReasons}
-              defaultValue={values.cancellationReasonId}
+              value={values.cancellationReasonId}
+              onChange={(value) => setValue("cancellationReasonId", value)}
               error={errors.cancellationReasonId}
               emptyLabel="Selecciona un motivo"
               emptyHint={
@@ -444,7 +524,15 @@ export function OfferForm({ mode, action, options, offer }: OfferFormProps) {
                 ) : undefined
               }
             />
-          ) : null}
+          ) : (
+            // El valor elegido se conserva en el envío aunque el campo deje de
+            // mostrarse: así la interfaz y el `FormData` nunca divergen.
+            <input
+              type="hidden"
+              name="cancellationReasonId"
+              value={values.cancellationReasonId}
+            />
+          )}
         </Grid>
         {!isCancelled ? (
           <p className="v-hint mt-2">
@@ -500,7 +588,8 @@ function Grid({ children }: { children: ReactNode }) {
 function TextField({
   id,
   label,
-  defaultValue,
+  value,
+  onChange,
   error,
   required,
   hint,
@@ -509,7 +598,8 @@ function TextField({
 }: {
   id: string;
   label: string;
-  defaultValue: string;
+  value: string;
+  onChange: (value: string) => void;
   error?: string;
   required?: boolean;
   hint?: ReactNode;
@@ -524,7 +614,8 @@ function TextField({
         type={type}
         inputMode={inputMode}
         className={`v-input${inputMode === "decimal" ? " v-num" : ""}`}
-        defaultValue={defaultValue}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
         {...fieldAria(id, error, Boolean(hint))}
       />
     </FormField>
@@ -535,7 +626,8 @@ function SelectField({
   id,
   label,
   options,
-  defaultValue,
+  value,
+  onChange,
   error,
   required,
   emptyLabel,
@@ -544,12 +636,20 @@ function SelectField({
   id: string;
   label: string;
   options: SelectOption[];
-  defaultValue: string;
+  value: string;
+  onChange: (value: string) => void;
   error?: string;
   required?: boolean;
   emptyLabel: string;
   emptyHint?: ReactNode;
 }) {
+  /**
+   * Si el valor enviado ya no está entre las opciones (por ejemplo, un maestro
+   * desactivado entre dos intentos de guardado), se añade explícitamente como
+   * opción para no perderlo en silencio al repintar el formulario.
+   */
+  const isKnown = value === "" || options.some((option) => option.id === value);
+
   return (
     <FormField
       id={id}
@@ -562,10 +662,14 @@ function SelectField({
         id={id}
         name={id}
         className="v-input"
-        defaultValue={defaultValue}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
         {...fieldAria(id, error, Boolean(emptyHint))}
       >
         <option value="">{emptyLabel}</option>
+        {!isKnown ? (
+          <option value={value}>Valor seleccionado (ya no disponible)</option>
+        ) : null}
         {options.map((option) => (
           <option key={option.id} value={option.id}>
             {option.label}
