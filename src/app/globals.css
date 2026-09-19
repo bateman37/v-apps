@@ -1,0 +1,40 @@
+@import "tailwindcss";
+
+:root {
+  --color-bg: #f5f6f8;
+  --color-surface: #ffffff;
+  --color-border: #dfe3e8;
+  --color-text: #1a2233;
+  --color-text-muted: #5b6472;
+  --color-primary: #1f3a5f;
+  --color-primary-dark: #14273f;
+  --color-primary-contrast: #ffffff;
+  --color-accent: #2f6fed;
+  --color-danger: #b3261e;
+  --color-success: #1a7f4e;
+  --color-warning: #8a5a00;
+  --color-warning-bg: #fdf3d9;
+  --color-focus-ring: #2f6fed;
+}
+
+@theme inline {
+  --color-background: var(--color-bg);
+  --color-foreground: var(--color-text);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+/* Foco visible y consistente para navegación por teclado. */
+a:focus-visible,
+button:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+  border-radius: 4px;
+}

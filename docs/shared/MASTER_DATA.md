@@ -31,3 +31,9 @@ Los valores concretos, obligatoriedad y reglas de uso de cada uno de estos maest
 ## Administración de maestros
 
 La gestión de estos maestros (alta, edición, activación/desactivación) corresponde al módulo de Administración común descrito en [`../product/VISION.md`](../product/VISION.md). Su diseño detallado —pantallas, permisos concretos— no forma parte de esta entrega.
+
+## Implementación de esta entrega (DEV-002)
+
+Prioridades, orígenes, tipos de oferta, estados de oferta, segmentaciones y perfiles profesionales están cargados en PostgreSQL con sus valores aprobados, mediante una carga inicial idempotente (`prisma/seed.ts`). Idiomas y motivos de cancelación existen como tablas vacías, sin valores todavía aprobados.
+
+Cada registro tiene un identificador interno, un `code` técnico estable y único (independiente del nombre visible, para poder cambiar la etiqueta sin romper referencias), un `name` visible en español, un estado activo y un orden de visualización. El mapeo código–nombre completo, único lugar donde se documenta para evitar duplicarlo, está en `prisma/seed-data.ts`. Los perfiles profesionales reutilizan literalmente sus códigos funcionales ya conocidos (PM, AN, DIL, DE, IN, DI, PR-BE, PR-FE, PR-REM, KN, IT, UX, TL, PLATF); el resto de catálogos usa códigos técnicos legibles en inglés (por ejemplo `HIGH`, `COMMERCIAL`, `PROJECT`), que son identificadores internos y no nuevas reglas de negocio.

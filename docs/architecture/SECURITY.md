@@ -17,7 +17,16 @@ El Excel legado del Gestor de Ofertas contiene parámetros técnicos y credencia
 
 ## Aplicación en esta entrega
 
-Esta entrega es exclusivamente documental: no existe todavía código, configuración ni credenciales que gestionar. Estas reglas se establecen ahora para que se apliquen desde el primer commit de código en la entrega de implementación del Gestor de Ofertas.
+La entrega de base técnica del Gestor de Ofertas (DEV-002) introduce el primer código y la primera base de datos real del proyecto. Se han aplicado ya estas reglas: `.env` está excluido del repositorio, `.env.example` solo contiene una cadena de conexión sintética, y no se han incluido credenciales ni datos reales de clientes o empleados.
+
+### Autenticación pospuesta (decisión temporal aprobada)
+
+El Product Owner ha decidido posponer la autenticación (ver `DEC-019` en [`../decisions/DECISIONS.md`](../decisions/DECISIONS.md)). Mientras esta decisión siga vigente:
+
+- La aplicación no implementa login, usuarios, contraseñas, sesiones ni roles.
+- No existe ningún usuario administrador temporal ni bypass de autenticación.
+- La interfaz muestra de forma visible el aviso `Entorno local · autenticación pendiente`.
+- **La aplicación es únicamente apta para desarrollo local.** No debe exponerse en una red accesible ni usarse en producción, ni conectarse a datos reales de clientes o empleados, hasta que exista un mecanismo definitivo de autenticación y autorización (decisión pendiente `DEC-056`).
 
 ## Relación con la migración de datos
 

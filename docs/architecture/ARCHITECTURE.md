@@ -2,7 +2,7 @@
 
 ## Estado de estas decisiones
 
-Las decisiones técnicas de este documento son el punto de partida aprobado para el diseño de Vincle Apps. Su implementación concreta se validará antes de comenzar el código de cada módulo. Ninguna de ellas se ha traducido todavía en código, configuración ejecutable o infraestructura real.
+Las decisiones técnicas de este documento son el punto de partida aprobado para el diseño de Vincle Apps. Desde la entrega de base técnica del Gestor de Ofertas (DEV-002), las decisiones de esta sección están **implementadas** en código: Next.js con App Router, TypeScript estricto, PostgreSQL y Prisma. Ver [`../PROJECT_STATUS.md`](../PROJECT_STATUS.md) para el detalle de qué contiene exactamente esa entrega.
 
 ## Decisiones técnicas iniciales aprobadas
 
@@ -34,10 +34,33 @@ Cada módulo de negocio (Gestor de Ofertas, ESM, FACT, etc.) se organiza como un
 - Auditoría (ver [`SECURITY.md`](SECURITY.md)).
 - Modelo de datos conceptual (ver [`DATA_MODEL.md`](DATA_MODEL.md)).
 
+## Estructura de código (implementada en DEV-002)
+
+El proyecto es un único monolito Next.js (App Router), organizado así:
+
+```text
+src/
+  app/                  Rutas y composición de páginas (Next.js App Router).
+  components/
+    layout/             Layout común: menú lateral, cabecera, aviso de entorno.
+    ui/                 Componentes de presentación realmente compartidos.
+  modules/
+    offers/             Código específico del Gestor de Ofertas.
+    master-data/         Acceso y presentación de los maestros.
+  lib/
+    db/                 Cliente Prisma y utilidades estrictamente técnicas.
+prisma/
+  schema.prisma         Modelo de datos.
+  seed.ts / seed-data.ts Carga inicial idempotente de maestros.
+  migrations/           Historial de migraciones.
+```
+
+Componentes de servidor por defecto; solo la navegación lateral (resaltado de la sección activa) es un componente de cliente, por depender de la ruta actual del navegador.
+
 ## Fuera de alcance en esta entrega
 
-No se define en este documento, por no estar todavía decidido:
+No se define todavía, por no estar decidido:
 
-- Proveedor o mecanismo definitivo de autenticación (ver [`../decisions/DECISIONS.md`](../decisions/DECISIONS.md)).
+- Proveedor o mecanismo definitivo de autenticación. Ver la decisión temporal de posponerla en [`../decisions/DECISIONS.md`](../decisions/DECISIONS.md) (`DEC-019`, `DEC-056`).
 - Infraestructura y estrategia de despliegue (ver [`../decisions/DECISIONS.md`](../decisions/DECISIONS.md)).
-- Estructura de carpetas, librerías auxiliares o convenciones de código concretas, que se definirán al iniciar la implementación del Gestor de Ofertas.
+- El modelo de datos transaccional (`Offer`, `Client`, `Person` y el resto de entidades descritas en [`DATA_MODEL.md`](DATA_MODEL.md)), que corresponde a entregas posteriores.
