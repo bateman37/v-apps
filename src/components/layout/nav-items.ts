@@ -24,16 +24,15 @@ export const NAV_SECTIONS: NavSection[] = [
     title: "Gestor de Ofertas",
     items: [
       { label: "Todas las ofertas", href: "/offers" },
-      {
-        label: "Nueva oferta",
-        href: "/offers/new",
-        disabled: true,
-        disabledHint: "Próxima entrega",
-      },
+      { label: "Nueva oferta", href: "/offers/new" },
     ],
   },
   {
     title: "Administración",
-    items: [{ label: "Maestros", href: "/admin/master-data" }],
+    items: [
+      { label: "Clientes", href: "/admin/clients" },
+      { label: "Personas", href: "/admin/people" },
+      { label: "Maestros de oferta", href: "/admin/master-data" },
+    ],
   },
 ];
