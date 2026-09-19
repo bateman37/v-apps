@@ -4,6 +4,13 @@ import { randomUUID } from "node:crypto";
 import { mkdir, open, rm, stat } from "node:fs/promises";
 import path from "node:path";
 
+export {
+  ATTACHMENT_VALIDATION_MESSAGES,
+  MAX_ATTACHMENT_SIZE_BYTES,
+  validateAttachment,
+  type AttachmentValidationError,
+} from "@/lib/attachment-validation";
+
 /**
  * Almacenamiento local de adjuntos (bloque 6).
  *
@@ -14,76 +21,12 @@ import path from "node:path";
  *   "path traversal" a partir de un nombre de archivo hostil.
  * - Solo se guarda en base de datos una clave relativa seguro, nunca una
  *   ruta absoluta.
+ * - La validación (tamaño, extensión, MIME) vive en
+ *   `@/lib/attachment-validation`, pura y sin `server-only`, para poder
+ *   probarse sin tocar el sistema de archivos.
  */
 
 const DEFAULT_STORAGE_DIR = "./storage/offer-attachments";
-
-export const MAX_ATTACHMENT_SIZE_BYTES = 25 * 1024 * 1024;
-
-/** Extensión → tipos MIME aceptados. Una política explícita y conservadora. */
-const ALLOWED_EXTENSIONS: Record<string, string[]> = {
-  ".pdf": ["application/pdf"],
-  ".doc": ["application/msword"],
-  ".docx": ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
-  ".xls": ["application/vnd.ms-excel"],
-  ".xlsx": ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"],
-  ".xlsm": [
-    "application/vnd.ms-excel.sheet.macroenabled.12",
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  ],
-  ".ppt": ["application/vnd.ms-powerpoint"],
-  ".pptx": [
-    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-  ],
-  ".png": ["image/png"],
-  ".jpg": ["image/jpeg"],
-  ".jpeg": ["image/jpeg"],
-  // El MIME de .msg varía mucho entre navegadores y sistemas operativos;
-  // `application/octet-stream` es habitual y no se rechaza para este único
-  // formato, precisamente para no bloquear de forma arbitraria un tipo
-  // aprobado. La extensión sigue siendo obligatoria y verificada.
-  ".msg": ["application/vnd.ms-outlook", "application/octet-stream"],
-};
-
-export type AttachmentValidationError =
-  | "empty"
-  | "too-large"
-  | "extension-not-allowed"
-  | "mime-not-allowed";
-
-export function validateAttachment(file: {
-  name: string;
-  size: number;
-  type: string;
-}): AttachmentValidationError | null {
-  if (file.size <= 0) {
-    return "empty";
-  }
-  if (file.size > MAX_ATTACHMENT_SIZE_BYTES) {
-    return "too-large";
-  }
-  const extension = path.extname(file.name).toLowerCase();
-  const allowedMimes = ALLOWED_EXTENSIONS[extension];
-  if (!allowedMimes) {
-    return "extension-not-allowed";
-  }
-  // Un `type` vacío (frecuente en algunos navegadores/SO) no se rechaza: se
-  // confía en la extensión, que sí se ha comprobado contra la lista cerrada.
-  if (file.type && !allowedMimes.includes(file.type)) {
-    return "mime-not-allowed";
-  }
-  return null;
-}
-
-export const ATTACHMENT_VALIDATION_MESSAGES: Record<AttachmentValidationError, string> =
-  {
-    empty: "El archivo está vacío.",
-    "too-large": "El archivo supera el tamaño máximo permitido (25 MB).",
-    "extension-not-allowed":
-      "Ese tipo de archivo no está permitido. Formatos admitidos: PDF, Word, Excel, PowerPoint, imágenes y .msg.",
-    "mime-not-allowed":
-      "El contenido del archivo no coincide con su extensión.",
-  };
 
 function storageRoot(): string {
   const configured = process.env.ATTACHMENTS_STORAGE_PATH?.trim();

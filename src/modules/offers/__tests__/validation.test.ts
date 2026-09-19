@@ -215,6 +215,46 @@ describe("validateOfferInput — motivo de cancelación", () => {
   });
 });
 
+describe("validateOfferInput — pedido de Navision (DEC-052)", () => {
+  it("exige el pedido de Navision cuando el estado es ACCEPTED", () => {
+    const result = validateOfferInput(
+      validValues({ statusId: STATUS_ACCEPTED }),
+      CONTEXT,
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.errors.navisionOrder).toMatch(/Aceptado/);
+    }
+  });
+
+  it("acepta el pedido informado cuando el estado es ACCEPTED", () => {
+    const result = validateOfferInput(
+      validValues({ statusId: STATUS_ACCEPTED, navisionOrder: "NAV-0001" }),
+      CONTEXT,
+    );
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.navisionOrder).toBe("NAV-0001");
+    }
+  });
+
+  it("no exige el pedido de Navision en otros estados", () => {
+    const result = validateOfferInput(validValues({ statusId: STATUS_SENT }), CONTEXT);
+    expect(result.ok).toBe(true);
+  });
+
+  it("no borra un pedido de Navision ya informado al abandonar ACCEPTED", () => {
+    const result = validateOfferInput(
+      validValues({ statusId: STATUS_SENT, navisionOrder: "NAV-0001" }),
+      CONTEXT,
+    );
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.navisionOrder).toBe("NAV-0001");
+    }
+  });
+});
+
 describe("totalProfileDays", () => {
   it("suma el detalle con decimal exacto y sin error de coma flotante", () => {
     expect(
