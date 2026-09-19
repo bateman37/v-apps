@@ -17,7 +17,26 @@ El Excel legado del Gestor de Ofertas contiene parámetros técnicos y credencia
 
 ## Aplicación en esta entrega
 
-La entrega de base técnica del Gestor de Ofertas (DEV-002) introduce el primer código y la primera base de datos real del proyecto. Se han aplicado ya estas reglas: `.env` está excluido del repositorio, `.env.example` solo contiene una cadena de conexión sintética, y no se han incluido credenciales ni datos reales de clientes o empleados.
+`.env` está excluido del repositorio, `.env.example` solo contiene una cadena de conexión sintética, y no se han incluido credenciales ni datos reales de clientes o empleados. La carga inicial (`prisma/seed.ts`) no crea ningún cliente, persona ni oferta de ejemplo.
+
+### Errores sin información sensible (DEV-003)
+
+Ningún error de PostgreSQL se muestra tal cual en la interfaz. `src/lib/db/errors.ts` traduce los errores conocidos de Prisma a mensajes en español (registro duplicado, referencia inexistente, base de datos no disponible) y devuelve un mensaje genérico para el resto. El detalle técnico —que podría contener la cadena de conexión, el SQL ejecutado o una traza— se registra únicamente en la consola del servidor de desarrollo.
+
+### Auditoría implementada (DEV-003)
+
+`AuditLog` registra, dentro de la misma transacción que el dato auditado:
+
+- Alta y modificación de ofertas, y cambio de estado como evento propio.
+- Alta, modificación y activación/desactivación de clientes, personas y registros de los ocho catálogos.
+
+Cada entrada guarda el tipo de entidad, el identificador, la acción, la fecha y una representación estructurada de los campos que cambian (`{ campo: { antes, despues } }`). Solo se guardan valores de negocio: nunca credenciales, cadenas de conexión ni detalles técnicos del motor.
+
+**Limitación conocida de atribución**: mientras no exista autenticación, `actorId` es siempre `null`, tanto en `AuditLog` como en `OfferStatusHistory`. No se inventa ningún usuario `admin`, `system` ni identidad temporal, de modo que en esta fase se sabe **qué** cambió y **cuándo**, pero no **quién** lo cambió. Quedan pendientes de auditar los ajustes del contador de numeración y las importaciones, porque todavía no existen.
+
+### Administración sin autorización real (DEV-003)
+
+Las pantallas `/admin/clients`, `/admin/people` y `/admin/master-data` permiten modificar los maestros y **no tienen ninguna restricción de acceso**: cualquiera que abra la aplicación puede usarlas. Cada una muestra un aviso explícito. La restricción real a administradores depende de `DEC-055` y `DEC-056`, ambas pendientes. No se ha creado ningún administrador temporal ni ningún bypass de autenticación.
 
 ### Autenticación pospuesta (decisión temporal aprobada)
 

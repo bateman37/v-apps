@@ -1,10 +1,16 @@
 // Esquema Prisma — Vincle Apps
 //
-// Esta entrega (DEV-002) implementa únicamente los maestros de referencia
-// necesarios para preparar el Gestor de Ofertas. No incluye todavía `Offer`,
-// `Client`, `Person` ni ninguna otra entidad transaccional: ver
-// docs/architecture/DATA_MODEL.md para el estado conceptual completo y
-// docs/decisions/DECISIONS.md para las decisiones que enmarcan este alcance.
+// Estado tras DEV-003: además de los maestros de referencia introducidos en
+// DEV-002, el esquema incluye el núcleo transaccional del Gestor de Ofertas
+// (`Client`, `Person`, `Offer`, `OfferProfileDays`, `OfferStatusHistory`),
+// el contador técnico de numeración (`SystemCounter`) y la auditoría mínima
+// (`AuditLog`).
+//
+// Siguen siendo conceptuales, y deliberadamente fuera de este esquema:
+// `User`, `Role`, `ImportBatch`, `ImportIssue` y cualquier entidad de ESM,
+// FACT, tarifas o implantaciones. Ver docs/architecture/DATA_MODEL.md para el
+// modelo conceptual completo y docs/decisions/DECISIONS.md para las
+// decisiones que enmarcan este alcance.
 
 generator client {
   provider = "prisma-client-js"
@@ -25,6 +31,8 @@ model Priority {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  offers Offer[]
+
   @@map("priorities")
 }
 
@@ -38,6 +46,8 @@ model Origin {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  offers Offer[]
+
   @@map("origins")
 }
 
@@ -50,6 +60,8 @@ model OfferType {
   sortOrder Int      @map("sort_order")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
+
+  offers Offer[]
 
   @@map("offer_types")
 }
@@ -66,6 +78,10 @@ model OfferStatus {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  offers                  Offer[]
+  statusHistoryAsPrevious OfferStatusHistory[] @relation("OfferStatusHistoryPrevious")
+  statusHistoryAsNew      OfferStatusHistory[] @relation("OfferStatusHistoryNew")
+
   @@map("offer_statuses")
 }
 
@@ -78,6 +94,8 @@ model Segmentation {
   sortOrder Int      @map("sort_order")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
+
+  offers Offer[]
 
   @@map("segmentations")
 }
@@ -94,6 +112,8 @@ model ProfessionalProfile {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  offerProfileDays OfferProfileDays[]
+
   @@map("professional_profiles")
 }
 
@@ -107,6 +127,8 @@ model Language {
   sortOrder Int      @map("sort_order")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
+
+  offers Offer[]
 
   @@map("languages")
 }
@@ -122,5 +144,199 @@ model CancellationReason {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  offers Offer[]
+
   @@map("cancellation_reasons")
+}
+
+// ---------------------------------------------------------------------------
+// Núcleo transaccional del Gestor de Ofertas (DEV-003)
+// ---------------------------------------------------------------------------
+
+/// Maestro de clientes.
+///
+/// `nameNormalized` es una columna derivada (minúsculas, sin espacios
+/// exteriores y con espacios interiores colapsados) con restricción única:
+/// es la forma compatible con PostgreSQL de impedir duplicados exactos de
+/// nombre sin depender de una extensión ni de un índice funcional que Prisma
+/// no modela. La aplicación la calcula siempre a partir de `name`.
+/// Ver docs/shared/MASTER_DATA.md.
+model Client {
+  id             String   @id @default(cuid())
+  name           String
+  nameNormalized String   @unique @map("name_normalized")
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  offers Offer[]
+
+  @@index([isActive, name])
+  @@map("clients")
+}
+
+/// Maestro común de personas (DEC-013): comercial y Project Manager no son
+/// entidades separadas, sino dos habilitaciones sobre el mismo registro.
+/// Una persona puede tener una, las dos o ninguna.
+model Person {
+  id                  String   @id @default(cuid())
+  name                String
+  canBeCommercial     Boolean  @default(false) @map("can_be_commercial")
+  canBeProjectManager Boolean  @default(false) @map("can_be_project_manager")
+  isActive            Boolean  @default(true) @map("is_active")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  commercialOffers     Offer[] @relation("OfferCommercial")
+  projectManagerOffers Offer[] @relation("OfferProjectManager")
+
+  @@index([isActive, name])
+  @@map("people")
+}
+
+/// Oferta. Entidad central del módulo.
+///
+/// `number` es único e inmutable: se asigna una sola vez, dentro de la
+/// transacción del primer guardado, a partir de `SystemCounter` (DEC-010,
+/// DEC-011). El total de jornadas por perfil NO se almacena aquí: se deriva
+/// siempre de `OfferProfileDays` (DEC-014).
+model Offer {
+  id     String @id @default(cuid())
+  number String @unique
+
+  // Identificación y relaciones obligatorias
+  clientId         String   @map("client_id")
+  priorityId       String   @map("priority_id")
+  commercialId     String   @map("commercial_id")
+  offerDate        DateTime @map("offer_date") @db.Date
+  originId         String   @map("origin_id")
+  projectManagerId String   @map("project_manager_id")
+  description      String
+  offerTypeId      String   @map("offer_type_id")
+  totalAmount      Decimal  @map("total_amount") @db.Decimal(14, 2)
+  statusId         String   @map("status_id")
+  requesterName    String   @map("requester_name")
+
+  // Campos opcionales
+  implantationText                String?   @map("implantation_text")
+  estimatedCommercialDeliveryDate DateTime? @map("estimated_commercial_delivery_date") @db.Date
+  estimatedClientDeliveryDate     DateTime? @map("estimated_client_delivery_date") @db.Date
+  commercialDays                  Decimal?  @map("commercial_days") @db.Decimal(8, 2)
+  estimatedPortfolioDate          DateTime? @map("estimated_portfolio_date") @db.Date
+  segmentationId                  String?   @map("segmentation_id")
+  notes                           String?
+  languageId                      String?   @map("language_id")
+  navisionOrder                   String?   @map("navision_order")
+  cancellationReasonId            String?   @map("cancellation_reason_id")
+
+  // Control de registro. `deletedAt` queda preparado para la eliminación
+  // lógica aprobada (DEC-016); esta entrega no expone borrado en interfaz.
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  client             Client              @relation(fields: [clientId], references: [id])
+  priority           Priority            @relation(fields: [priorityId], references: [id])
+  commercial         Person              @relation("OfferCommercial", fields: [commercialId], references: [id])
+  projectManager     Person              @relation("OfferProjectManager", fields: [projectManagerId], references: [id])
+  origin             Origin              @relation(fields: [originId], references: [id])
+  offerType          OfferType           @relation(fields: [offerTypeId], references: [id])
+  status             OfferStatus         @relation(fields: [statusId], references: [id])
+  segmentation       Segmentation?       @relation(fields: [segmentationId], references: [id])
+  language           Language?           @relation(fields: [languageId], references: [id])
+  cancellationReason CancellationReason? @relation(fields: [cancellationReasonId], references: [id])
+
+  profileDays   OfferProfileDays[]
+  statusHistory OfferStatusHistory[]
+
+  @@index([deletedAt, offerDate])
+  @@index([clientId])
+  @@index([commercialId])
+  @@index([projectManagerId])
+  @@index([statusId])
+  @@index([offerTypeId])
+  @@index([originId])
+  @@index([priorityId])
+  @@index([segmentationId])
+  @@index([languageId])
+  @@index([cancellationReasonId])
+  @@map("offers")
+}
+
+/// Detalle de jornadas de una oferta por perfil profesional.
+/// Una oferta puede no tener ninguna fila. No se crean filas para valores
+/// vacíos ni para cero: el total se deriva sumando las filas existentes.
+model OfferProfileDays {
+  id                    String  @id @default(cuid())
+  offerId               String  @map("offer_id")
+  professionalProfileId String  @map("professional_profile_id")
+  days                  Decimal @db.Decimal(8, 2)
+
+  offer               Offer               @relation(fields: [offerId], references: [id])
+  professionalProfile ProfessionalProfile @relation(fields: [professionalProfileId], references: [id])
+
+  @@unique([offerId, professionalProfileId])
+  @@index([professionalProfileId])
+  @@map("offer_profile_days")
+}
+
+/// Histórico de cambios de estado de una oferta.
+///
+/// El alta crea el primer evento con `previousStatusId` a `null`. Una
+/// modificación solo añade un evento si el estado cambia realmente.
+/// `actorId` permanece `null` mientras no exista autenticación (DEC-019):
+/// no se inventa ningún usuario técnico.
+model OfferStatusHistory {
+  id               String   @id @default(cuid())
+  offerId          String   @map("offer_id")
+  previousStatusId String?  @map("previous_status_id")
+  newStatusId      String   @map("new_status_id")
+  changedAt        DateTime @default(now()) @map("changed_at")
+  actorId          String?  @map("actor_id")
+
+  offer          Offer        @relation(fields: [offerId], references: [id])
+  previousStatus OfferStatus? @relation("OfferStatusHistoryPrevious", fields: [previousStatusId], references: [id])
+  newStatus      OfferStatus  @relation("OfferStatusHistoryNew", fields: [newStatusId], references: [id])
+
+  @@index([offerId, changedAt])
+  @@index([previousStatusId])
+  @@index([newStatusId])
+  @@map("offer_status_history")
+}
+
+/// Contadores técnicos del sistema. El único contador de esta entrega es
+/// `offer_number`, que alimenta la numeración global de ofertas (DEC-010).
+///
+/// El incremento se realiza con un `UPDATE ... RETURNING` atómico dentro de
+/// la transacción del alta, de modo que dos altas concurrentes nunca obtienen
+/// el mismo valor. No existe interfaz de ajuste manual: DEC-012 exige un área
+/// protegida y todavía no hay autenticación.
+model SystemCounter {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("system_counters")
+}
+
+/// Auditoría mínima de altas, modificaciones y activaciones/desactivaciones.
+///
+/// `actorId` es nullable y permanece siempre `null` mientras no exista
+/// autenticación (DEC-019). `changes` guarda una representación estructurada
+/// de los campos modificados; nunca credenciales, cadenas de conexión ni
+/// trazas técnicas. Ver docs/architecture/SECURITY.md.
+model AuditLog {
+  id         String   @id @default(cuid())
+  entityType String   @map("entity_type")
+  entityId   String   @map("entity_id")
+  action     String
+  changes    Json?
+  actorId    String?  @map("actor_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([entityType, entityId, createdAt])
+  @@index([createdAt])
+  @@map("audit_logs")
 }

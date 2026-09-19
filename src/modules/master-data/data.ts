@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db/prisma";
+import { CATALOG_KEYS, type CatalogKey } from "@/modules/master-data/catalogs";
 
 export type MasterDataRecord = {
   id: string;
@@ -9,21 +10,9 @@ export type MasterDataRecord = {
 };
 
 export type MasterDataGroup = {
-  key: string;
-  label: string;
+  key: CatalogKey;
   records: MasterDataRecord[];
 };
-
-const GROUP_LABELS = {
-  priorities: "Prioridades",
-  origins: "Orígenes",
-  offerTypes: "Tipos de oferta",
-  offerStatuses: "Estados de oferta",
-  segmentations: "Segmentaciones",
-  professionalProfiles: "Perfiles profesionales",
-  languages: "Idiomas",
-  cancellationReasons: "Motivos de cancelación",
-} as const;
 
 const SELECT = {
   id: true,
@@ -33,16 +22,14 @@ const SELECT = {
   sortOrder: true,
 } as const;
 
-const ORDER_BY = { sortOrder: "asc" } as const;
+const ORDER_BY = [{ sortOrder: "asc" as const }, { name: "asc" as const }];
 
 /**
- * Lee, únicamente para consulta, los maestros de referencia del Gestor de
- * Ofertas ya disponibles en esta entrega. No incluye clientes, personas ni
- * ninguna entidad transaccional (ver docs/architecture/DATA_MODEL.md).
+ * Lee los ocho catálogos del Gestor de Ofertas, activos e inactivos: en
+ * Administración un registro desactivado sigue siendo visible y editable.
  *
- * Puede lanzar si PostgreSQL no está disponible; la pantalla que la invoca
- * es responsable de mostrar un mensaje de error en español sin detalles
- * técnicos sensibles.
+ * Puede lanzar si PostgreSQL no está disponible; la pantalla que la invoca es
+ * responsable de mostrar un mensaje en español sin detalles técnicos.
  */
 export async function getMasterDataGroups(): Promise<MasterDataGroup[]> {
   const [
@@ -60,45 +47,21 @@ export async function getMasterDataGroups(): Promise<MasterDataGroup[]> {
     prisma.offerType.findMany({ select: SELECT, orderBy: ORDER_BY }),
     prisma.offerStatus.findMany({ select: SELECT, orderBy: ORDER_BY }),
     prisma.segmentation.findMany({ select: SELECT, orderBy: ORDER_BY }),
-    prisma.professionalProfile.findMany({
-      select: SELECT,
-      orderBy: ORDER_BY,
-    }),
+    prisma.professionalProfile.findMany({ select: SELECT, orderBy: ORDER_BY }),
     prisma.language.findMany({ select: SELECT, orderBy: ORDER_BY }),
-    prisma.cancellationReason.findMany({
-      select: SELECT,
-      orderBy: ORDER_BY,
-    }),
+    prisma.cancellationReason.findMany({ select: SELECT, orderBy: ORDER_BY }),
   ]);
 
-  return [
-    { key: "priorities", label: GROUP_LABELS.priorities, records: priorities },
-    { key: "origins", label: GROUP_LABELS.origins, records: origins },
-    {
-      key: "offerTypes",
-      label: GROUP_LABELS.offerTypes,
-      records: offerTypes,
-    },
-    {
-      key: "offerStatuses",
-      label: GROUP_LABELS.offerStatuses,
-      records: offerStatuses,
-    },
-    {
-      key: "segmentations",
-      label: GROUP_LABELS.segmentations,
-      records: segmentations,
-    },
-    {
-      key: "professionalProfiles",
-      label: GROUP_LABELS.professionalProfiles,
-      records: professionalProfiles,
-    },
-    { key: "languages", label: GROUP_LABELS.languages, records: languages },
-    {
-      key: "cancellationReasons",
-      label: GROUP_LABELS.cancellationReasons,
-      records: cancellationReasons,
-    },
-  ];
+  const byKey: Record<CatalogKey, MasterDataRecord[]> = {
+    priorities,
+    origins,
+    offerTypes,
+    offerStatuses,
+    segmentations,
+    professionalProfiles,
+    languages,
+    cancellationReasons,
+  };
+
+  return CATALOG_KEYS.map((key) => ({ key, records: byKey[key] }));
 }

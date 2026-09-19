@@ -4,7 +4,28 @@ Este documento describe las entidades conceptuales necesarias para el Gestor de 
 
 ## Estado de implementación
 
-La entrega de base técnica del Gestor de Ofertas (DEV-002) ha implementado en PostgreSQL, mediante Prisma (ver `prisma/schema.prisma`), únicamente los **maestros de referencia** listados más abajo: `Priority`, `Origin`, `OfferType`, `OfferStatus`, `Segmentation`, `ProfessionalProfile`, `Language` y `CancellationReason`. Todas las demás entidades descritas en este documento (`Offer`, `Client`, `Person`, `OfferProfileDays`, `OfferStatusHistory`, `SystemCounter`, `AuditLog`, `ImportBatch`, `ImportIssue`, `User`, `Role`) siguen siendo **conceptuales**: no tienen todavía tabla, migración ni código asociado. Su concreción (tipos SQL, índices, nombres físicos definitivos) corresponde a entregas posteriores.
+Estado tras DEV-003, en `prisma/schema.prisma`:
+
+**Implementadas en PostgreSQL**, con migración acumulativa:
+
+- Maestros de referencia (DEV-002): `Priority`, `Origin`, `OfferType`, `OfferStatus`, `Segmentation`, `ProfessionalProfile`, `Language`, `CancellationReason`.
+- Núcleo transaccional (DEV-003): `Client`, `Person`, `Offer`, `OfferProfileDays`, `OfferStatusHistory`, `SystemCounter`, `AuditLog`.
+
+**Todavía conceptuales**, sin tabla ni código: `User`, `Role`, `ImportBatch`, `ImportIssue`, y cualquier entidad de ESM, FACT, tarifas o implantaciones.
+
+### Detalle de las tablas añadidas en DEV-003
+
+| Modelo | Tabla | Notas |
+|---|---|---|
+| `Client` | `clients` | `name`, `isActive`, timestamps. `nameNormalized` es una columna derivada (minúsculas, espacios colapsados) con **restricción única**: es la forma compatible con PostgreSQL de impedir duplicados exactos de nombre sin depender de una extensión ni de un índice funcional que Prisma no modela. La aplicación la calcula siempre a partir de `name`. |
+| `Person` | `people` | `name`, `canBeCommercial`, `canBeProjectManager`, `isActive`, timestamps. Sin email, teléfono, departamento ni credenciales. |
+| `Offer` | `offers` | `number` único e inmutable; importes y jornadas en `numeric` exacto (`numeric(14,2)` y `numeric(8,2)`), nunca coma flotante; fechas de negocio como `date`; `deletedAt` nullable para la eliminación lógica aprobada. |
+| `OfferProfileDays` | `offer_profile_days` | Restricción única `(offer_id, professional_profile_id)`. Sin timestamps: no aportarían trazabilidad real y no se usarían. |
+| `OfferStatusHistory` | `offer_status_history` | Estado anterior nullable para el alta inicial, estado nuevo, `changedAt` y `actorId` nullable. |
+| `SystemCounter` | `system_counters` | Clave única y valor entero. Única clave en uso: `offer_number`. |
+| `AuditLog` | `audit_logs` | Tipo de entidad, identificador, acción, `changes` en JSON y `actorId` nullable. |
+
+Índices creados: la clave única de `offers.number`, un índice por cada clave foránea usada como filtro (`clientId`, `commercialId`, `projectManagerId`, `statusId`, `offerTypeId`, `originId`, `priorityId`, `segmentationId`, `languageId`, `cancellationReasonId`), un índice compuesto `(deletedAt, offerDate)` para el listado, `(offerId, changedAt)` en el histórico y `(entityType, entityId, createdAt)` más `(createdAt)` en la auditoría. No se han creado índices especulativos.
 
 ## Principios
 
@@ -43,11 +64,11 @@ La entrega de base técnica del Gestor de Ofertas (DEV-002) ha implementado en P
 
 ### Numeración
 
-- **SystemCounter** (o mecanismo equivalente): contador global y seguro que alimenta la numeración de ofertas. Administrado desde un área protegida, no como CRUD ordinario. Detalle de reglas en [`../offers/BUSINESS_RULES.md`](../offers/BUSINESS_RULES.md).
+- **SystemCounter**: contador global y seguro que alimenta la numeración de ofertas. Implementado con incremento atómico (`UPDATE ... RETURNING`) dentro de la transacción del alta. La administración desde un área protegida (`DEC-012`) **no** está implementada: sin autenticación no podría considerarse protegida. Detalle de reglas en [`../offers/BUSINESS_RULES.md`](../offers/BUSINESS_RULES.md).
 
 ### Auditoría e importación
 
-- **AuditLog**: registro de auditoría de altas, modificaciones, cambios de estado, ajustes del contador e importaciones (ver [`SECURITY.md`](SECURITY.md)).
+- **AuditLog**: registro de auditoría de altas, modificaciones, cambios de estado, activaciones y desactivaciones (ver [`SECURITY.md`](SECURITY.md)). Implementado para ofertas, clientes, personas y catálogos. Los ajustes del contador y las importaciones se auditarán cuando existan.
 - **ImportBatch**: lote de importación de datos históricos, con sistema de origen, fecha y trazabilidad del proceso.
 - **ImportIssue**: incidencia detectada durante una importación, asociada a un `ImportBatch` y, cuando aplique, a la oferta afectada. Ver incidencias conocidas del histórico en [`../offers/MIGRATION.md`](../offers/MIGRATION.md).
 

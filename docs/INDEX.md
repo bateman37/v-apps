@@ -11,13 +11,14 @@ Este índice es el punto de entrada a toda la documentación de Vincle Apps. Los
 5. [`architecture/ARCHITECTURE.md`](architecture/ARCHITECTURE.md) — arquitectura inicial propuesta y principios técnicos.
 6. [`architecture/DATA_MODEL.md`](architecture/DATA_MODEL.md) — modelo conceptual de entidades y relaciones.
 7. [`architecture/SECURITY.md`](architecture/SECURITY.md) — reglas de seguridad y datos sensibles.
-8. [`shared/MASTER_DATA.md`](shared/MASTER_DATA.md) — maestros compartidos por toda la plataforma.
-9. [`offers/OVERVIEW.md`](offers/OVERVIEW.md) — visión funcional del Gestor de Ofertas.
-10. [`offers/FIELDS.md`](offers/FIELDS.md) — campos del formulario de oferta.
-11. [`offers/BUSINESS_RULES.md`](offers/BUSINESS_RULES.md) — numeración, jornadas y reglas de negocio conocidas.
-12. [`offers/STATUSES.md`](offers/STATUSES.md) — estados de oferta conocidos.
-13. [`offers/MIGRATION.md`](offers/MIGRATION.md) — estrategia de migración desde SQL Server / Excel.
-14. [`decisions/DECISIONS.md`](decisions/DECISIONS.md) — registro de decisiones aprobadas y pendientes.
+8. [`design/BRAND_UI.md`](design/BRAND_UI.md) — identidad visual de Vincle aplicada a la interfaz: tokens de color, tipografía y accesibilidad.
+9. [`shared/MASTER_DATA.md`](shared/MASTER_DATA.md) — maestros compartidos por toda la plataforma.
+10. [`offers/OVERVIEW.md`](offers/OVERVIEW.md) — visión funcional del Gestor de Ofertas.
+11. [`offers/FIELDS.md`](offers/FIELDS.md) — campos del formulario de oferta.
+12. [`offers/BUSINESS_RULES.md`](offers/BUSINESS_RULES.md) — numeración, jornadas y reglas de negocio conocidas.
+13. [`offers/STATUSES.md`](offers/STATUSES.md) — estados de oferta conocidos.
+14. [`offers/MIGRATION.md`](offers/MIGRATION.md) — estrategia de migración desde SQL Server / Excel.
+15. [`decisions/DECISIONS.md`](decisions/DECISIONS.md) — registro de decisiones aprobadas y pendientes.
 
 ## Documentación de proceso (raíz del repositorio)
 
