@@ -28,6 +28,25 @@ import {
 /** Código estable del estado que obliga a informar el motivo de cancelación. */
 export const CANCELLED_STATUS_CODE = "CANCELLED";
 
+/**
+ * Código estable del estado que obliga a informar el pedido de Navision
+ * (`DEC-052`, resuelta en DEV-004). Solo se exige un texto no vacío: no se
+ * inventa formato, longitud corporativa ni validación contra Navision.
+ */
+export const ACCEPTED_STATUS_CODE = "ACCEPTED";
+
+/** Longitud máxima admitida para el pedido de Navision. */
+export const NAVISION_ORDER_MAX_LENGTH = 100;
+
+/**
+ * Longitud máxima de un comentario interno de oferta.
+ *
+ * 4.000 caracteres es holgado para una anotación de trabajo —aproximadamente
+ * dos páginas— y a la vez acotado: un comentario no es un documento, y para
+ * eso están los adjuntos. Se documenta en docs/offers/OVERVIEW.md.
+ */
+export const MAX_COMMENT_LENGTH = 4000;
+
 /** Prefijo de los campos de jornadas por perfil dentro del formulario. */
 export const PROFILE_DAYS_FIELD_PREFIX = "profileDays";
 
@@ -92,6 +111,8 @@ export type ValidatedOffer = {
 export type OfferValidationContext = {
   /** Identificadores de estados cuyo código estable es `CANCELLED`. */
   cancelledStatusIds: readonly string[];
+  /** Identificadores de estados cuyo código estable es `ACCEPTED`. */
+  acceptedStatusIds: readonly string[];
   /** Perfiles para los que el formulario admite jornadas. */
   professionalProfileIds: readonly string[];
   /** Si no hay motivos de cancelación disponibles, se avisa sin inventar uno. */
@@ -101,8 +122,6 @@ export type OfferValidationContext = {
 export type OfferValidationResult =
   | { ok: true; data: ValidatedOffer }
   | { ok: false; errors: FieldErrors };
-
-const EMPTY_PROFILE_DAYS: Record<string, string> = {};
 
 /** Valores vacíos iniciales del formulario de alta. */
 export function emptyOfferFormValues(): OfferFormValues {
@@ -128,7 +147,9 @@ export function emptyOfferFormValues(): OfferFormValues {
     statusId: "",
     cancellationReasonId: "",
     navisionOrder: "",
-    profileDays: EMPTY_PROFILE_DAYS,
+    // Objeto nuevo en cada llamada: el formulario lo muta por copia, pero no
+    // debe existir ninguna instancia compartida entre formularios.
+    profileDays: {},
   };
 }
 
@@ -227,7 +248,7 @@ export function validateOfferInput(
   const navisionOrder = checkField(
     errors,
     "navisionOrder",
-    optionalText("El pedido de Navision", 100),
+    optionalText("El pedido de Navision", NAVISION_ORDER_MAX_LENGTH),
     values.navisionOrder,
   );
   const segmentationId = checkField(errors, "segmentationId", optionalSelection(), values.segmentationId);
@@ -296,6 +317,17 @@ export function validateOfferInput(
     } else {
       cancellationReasonId = rawCancellationReasonId;
     }
+  }
+
+  // Pedido de Navision: obligatorio cuando el estado seleccionado es
+  // `ACCEPTED` (DEC-052). Si más adelante se abandona ese estado, el valor ya
+  // informado **no** se borra automáticamente.
+  const isAccepted =
+    statusId !== undefined && context.acceptedStatusIds.includes(statusId);
+
+  if (isAccepted && !navisionOrder && !errors.navisionOrder) {
+    errors.navisionOrder =
+      "El pedido de Navision es obligatorio cuando el estado es Aceptado.";
   }
 
   if (Object.keys(errors).length > 0) {

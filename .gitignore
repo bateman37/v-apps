@@ -38,6 +38,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# adjuntos locales de oferta (bloque 6): nunca en Git, nunca bajo public/
+/storage/offer-attachments/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

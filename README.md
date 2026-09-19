@@ -4,15 +4,19 @@ Vincle Apps es una plataforma web interna, todavía en fase inicial, que sustitu
 
 ## Estado actual
 
-Esta entrega añade el **primer flujo realmente operativo del Gestor de Ofertas**, sobre la base técnica creada anteriormente:
+Esta entrega (DEV-004) cierra funcionalmente el primer módulo, el Gestor de Ofertas, sobre la base operativa de DEV-003:
 
-- Administración de **clientes**, **personas** y los **ocho catálogos** de oferta: alta, edición y activación o desactivación. Ningún registro se borra físicamente.
-- **Alta, listado, consulta y modificación de ofertas**, con numeración automática `VI` + año + mes + contador global, segura ante altas simultáneas e inmutable al modificar.
-- **Búsqueda, filtros, ordenación y paginación** resueltos en PostgreSQL, con el estado completo en la dirección del navegador.
-- **Jornadas por perfil** con total calculado, **histórico de estados** y **auditoría** de los cambios.
-- **Identidad visual oficial de Vincle** aplicada de forma transversal (ver [`docs/design/BRAND_UI.md`](docs/design/BRAND_UI.md)).
+- **Autenticación local provisional**: login con usuario y contraseña, cambio de contraseña obligatorio en el primer acceso, cierre de sesión, y administración de usuarios (`/admin/users`) vinculados al maestro común de personas. Roles `ADMIN` y `USER`, con permisos comprobados en servidor en cada pantalla y cada acción.
+- **Código de cliente** obligatorio y único en `/admin/clients`, con aviso «Código pendiente» para los clientes heredados de DEV-003.
+- **Auditoría atribuible y versiones inmutables** de cada oferta, con comparación de campos y jornadas entre versiones.
+- **Comentarios internos** y **adjuntos** (hasta 25 MB, formatos cerrados) en la ficha de cada oferta, con descarga autenticada.
+- **Archivo lógico y recuperación** de ofertas (`/offers?scope=archivadas`), sin borrado físico.
+- **Bandeja «Pendiente de revisión»** derivada del estado y la asignación, con regla de flujo de estados y pedido de Navision obligatorio en `Aceptado`.
+- **Centro de notificaciones internas** y administración de reglas de notificación (`/admin/notification-rules`), al estilo de un disparador. El canal «Interna + email» no envía todavía ningún correo real.
+- **Exportación a Excel** del listado, con los mismos filtros y permisos, en tres hojas (`Ofertas`, `Jornadas`, `Historial`).
+- **Administración protegida del contador** de numeración (`/admin/counter`), solo para `ADMIN`.
 
-> ⚠️ **Aplicación únicamente apta para desarrollo local.** Todavía no implementa autenticación ni autorización (decisión temporal aprobada, ver [`docs/decisions/DECISIONS.md`](docs/decisions/DECISIONS.md)). No la expongas en una red accesible ni la uses con datos reales de clientes o empleados.
+> ⚠️ **Aplicación únicamente apta para desarrollo local.** La autenticación es local y provisional (decisión temporal aprobada, ver [`docs/decisions/DECISIONS.md`](docs/decisions/DECISIONS.md)): no hay SSO, no hay email real, y no debe exponerse en una red accesible ni usarse con datos reales de clientes o empleados.
 
 Para el detalle del estado y del próximo objetivo, ver [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md).
 
@@ -83,11 +87,15 @@ Copia el archivo de ejemplo:
 cp .env.example .env
 ```
 
-Abre `.env` y sustituye el valor de `DATABASE_URL` por la conexión a tu base de datos local, por ejemplo:
+Abre `.env` y completa, como mínimo:
 
 ```
 DATABASE_URL="postgresql://vapps:una_contrasena_local_a_tu_eleccion@localhost:5432/vapps_dev"
+ADMIN_BOOTSTRAP_USERNAME="elige-un-usuario"
+ADMIN_BOOTSTRAP_PASSWORD="elige-una-contrasena-temporal"
 ```
+
+`ADMIN_BOOTSTRAP_USERNAME` y `ADMIN_BOOTSTRAP_PASSWORD` solo se usan una vez, en el paso 9 de más abajo, para crear la primera cuenta de administrador. Puedes borrarlas del `.env` en cuanto hayas iniciado sesión. El resto de variables (`SESSION_COOKIE_NAME`, `ATTACHMENTS_STORAGE_PATH`) tienen un valor por defecto razonable y no es necesario tocarlas.
 
 El archivo `.env` nunca se sube al repositorio (está en `.gitignore`): solo existe en tu máquina.
 
@@ -115,23 +123,31 @@ npm run db:seed
 
 Inserta (o actualiza si ya existían) los valores maestros aprobados: prioridades, orígenes, tipos de oferta, estados de oferta, segmentaciones y perfiles profesionales. Los idiomas y los motivos de cancelación se dejan intencionadamente vacíos, porque todavía no hay valores aprobados; podrás crearlos tú desde la propia aplicación.
 
-También crea, **solo si todavía no existe**, el contador técnico de numeración de ofertas con valor `0`. Volver a ejecutar este comando nunca reinicia ni rebaja un contador que ya esté en uso. La carga inicial no crea ningún cliente, persona ni oferta de ejemplo.
+También crea, **solo si todavía no existe**, el contador técnico de numeración de ofertas con valor `0`, y comprueba o crea idempotentemente las personas autorizadas (comerciales y Project Managers) y las tres reglas iniciales de notificación. Volver a ejecutar este comando nunca reinicia ni rebaja un contador que ya esté en uso, ni duplica personas ni reglas. La carga inicial no crea ningún cliente ni oferta de ejemplo.
 
-### 9. Arrancar la aplicación
+### 9. Crear el administrador inicial
+
+```bash
+npm run auth:bootstrap-admin
+```
+
+Crea, **solo si todavía no existe**, la cuenta de administrador con el usuario y la contraseña temporal de tu `.env`, vinculada a la persona «Dennis Barragan» del seed. Solo se guarda el hash de la contraseña; nunca se imprime en la consola ni se restablece si la cuenta ya existe. Repetir este comando cuando la cuenta ya existe no hace nada y te lo indica explícitamente.
+
+### 10. Arrancar la aplicación
 
 ```bash
 npm run dev
 ```
 
-### 10. Abrir la aplicación
+### 11. Abrir la aplicación e iniciar sesión
 
-Visita [http://localhost:3000](http://localhost:3000) en tu navegador. La raíz te llevará automáticamente a `/offers`.
+Visita [http://localhost:3000](http://localhost:3000). Sin sesión, la raíz te lleva a `/login`. Inicia sesión con el usuario y la contraseña temporal del paso 9: la aplicación te pedirá cambiarla antes de continuar. Con sesión, la raíz te lleva a `/offers`.
 
-### 11. Detener la aplicación
+### 12. Detener la aplicación
 
 Vuelve a la terminal donde ejecutaste `npm run dev` y pulsa `Ctrl+C`.
 
-### 12. Repetir el seed y comprobar que no duplica registros
+### 13. Repetir el seed y comprobar que no duplica registros
 
 Vuelve a ejecutar:
 
@@ -139,17 +155,23 @@ Vuelve a ejecutar:
 npm run db:seed
 ```
 
-Los mensajes mostrarán el mismo número de registros verificados que la primera vez (por ejemplo, 3 prioridades, 14 perfiles profesionales, etc.) y el contador de numeración seguirá mostrando su valor actual. Ejecutarlo varias veces nunca duplica datos ni reinicia el contador.
+Los mensajes mostrarán el mismo número de registros verificados que la primera vez (por ejemplo, 3 prioridades, 14 perfiles profesionales, 14 personas autorizadas, 3 reglas de notificación, etc.) y el contador de numeración seguirá mostrando su valor actual. Ejecutarlo varias veces nunca duplica datos ni reinicia el contador. Repite también `npm run auth:bootstrap-admin`: verás que confirma que la cuenta ya existe, sin tocarla.
 
 ## Prueba manual de aceptación
 
-Guía numerada para el Product Owner. Continúa después de la guía de arranque anterior, con la aplicación en marcha en [http://localhost:3000](http://localhost:3000). No necesitas tocar PostgreSQL en ningún momento, ni usar datos reales: todos los nombres que escribas pueden ser inventados.
+Guía numerada para el Product Owner. Continúa después de la guía de arranque anterior, con la aplicación en marcha en [http://localhost:3000](http://localhost:3000) y sesión iniciada como administrador. No necesitas tocar PostgreSQL en ningún momento, ni usar datos reales: todos los nombres que escribas pueden ser inventados.
 
-### 1. Crear un cliente
+### 0. Comprobar que el acceso anónimo está bloqueado
 
-Entra en **Administración > Clientes**. Escribe un nombre inventado (por ejemplo, `Cliente de prueba 1`) y pulsa **Crear cliente**.
+Cierra sesión (botón **Cerrar sesión**, arriba a la derecha) y visita directamente `http://localhost:3000/offers` o `http://localhost:3000/admin/users` sin haber iniciado sesión.
 
-> **Resultado esperado**: el cliente aparece en la tabla de abajo con la etiqueta verde `Activo` y con `0` ofertas. Si vuelves a intentar crear el mismo nombre (aunque cambies mayúsculas o espacios), verás el error `Ya existe un cliente con ese nombre.`
+> **Resultado esperado**: en ambos casos se te lleva a `/login` con el aviso `Tu sesión ha caducado o no es válida`. Vuelve a iniciar sesión antes de continuar.
+
+### 1. Crear un cliente con código
+
+Entra en **Administración > Clientes**. Escribe un código (por ejemplo, `CLI001`) y un nombre inventado (por ejemplo, `Cliente de prueba 1`) y pulsa **Crear cliente**.
+
+> **Resultado esperado**: el cliente aparece en la tabla de abajo con su código, la etiqueta verde `Activo` y con `0` ofertas. Si dejas el código vacío, el alta se rechaza. Si repites el mismo código o el mismo nombre (aunque cambies mayúsculas o espacios), verás el error correspondiente de duplicado.
 
 ### 2. Crear una persona habilitada como comercial
 
@@ -211,15 +233,76 @@ Entra en **Administración > Maestros de oferta**, busca el motivo de cancelaci�
 
 > **Resultado esperado**: el registro sigue en la tabla de Administración, ahora con la etiqueta gris `Inactivo`. Si abres la oferta que lo usa, el motivo y el cliente **siguen apareciendo con normalidad**. Si abres **Nueva oferta**, ese cliente ya no aparece entre los seleccionables; pero si abres **Modificar** en la oferta que ya lo usaba, sí sigue disponible, marcado como `(inactivo)`, para que puedas guardar los cambios sin perder el dato.
 
+### 12. Crear un usuario normal y comprobar sus permisos
+
+Entra en **Administración > Usuarios** y crea uno vinculado a una de las personas que creaste antes (por ejemplo, la persona comercial), con rol `Usuario` y una contraseña temporal. Abre una ventana de navegación privada, entra con ese usuario y cambia la contraseña cuando te lo pida.
+
+> **Resultado esperado**: con ese usuario no ves el menú **Administración**. Si escribes directamente la URL `/admin/clients`, se te deniega el acceso. En **Todas las ofertas** solo ves las ofertas donde esa persona es comercial o PM, o las que ese usuario ha creado; no ves el resto.
+
+### 13. Pedido de Navision obligatorio en «Aceptado»
+
+Abre una oferta y pulsa **Modificar**. Cambia el estado a `Aceptado` sin rellenar **Pedido de Navision** y guarda.
+
+> **Resultado esperado**: el guardado se rechaza con el mensaje junto al campo. Rellena un pedido cualquiera (por ejemplo, `NAV-0001`) y guarda: esta vez se acepta.
+
+### 14. Bandeja «Pendiente de revisión»
+
+Cambia el estado de una oferta a `A valorar PM` (con un PM asignado) y de otra a `Entregado a comercial` (con un comercial asignado). Entra en **Pendiente de revisión**.
+
+> **Resultado esperado**: ambas ofertas aparecen en la bandeja, cada una con su tipo. Abre la de `A valorar PM` y usa el bloque **Revisar**: si intentas guardar sin cambiar el estado, se rechaza con el mensaje correspondiente; si eliges otro estado, la revisión se completa y la oferta desaparece de la bandeja.
+
+### 15. Comentarios con autor y fecha automáticos
+
+Abre cualquier oferta y añade un comentario en el bloque **Comentarios internos**.
+
+> **Resultado esperado**: el comentario aparece con tu nombre y la fecha y hora actuales, sin que hayas podido escribirlos tú.
+
+### 16. Adjuntar y descargar un documento
+
+En la misma ficha, adjunta un PDF pequeño (o cualquier imagen `.png`/`.jpg`). Después intenta adjuntar un archivo `.exe` o uno mayor de 25 MB.
+
+> **Resultado esperado**: el PDF se sube y aparece en la lista, con enlace de descarga que funciona. El `.exe` y el archivo demasiado grande se rechazan con un mensaje claro.
+
+### 17. Archivar y recuperar una oferta
+
+Abre una oferta y pulsa **Archivar**, confirmando el aviso. Entra después en **Ofertas archivadas** desde el menú.
+
+> **Resultado esperado**: la oferta desaparece de **Todas las ofertas** pero aparece en **Ofertas archivadas**, con el mismo número y los mismos datos. Ábrela y pulsa **Recuperar**: vuelve a aparecer en el listado ordinario.
+
+### 18. Notificaciones internas
+
+Con dos usuarios distintos (uno comercial, otro PM de la misma oferta), crea una oferta con el usuario comercial asignándole ese PM. Entra con el usuario PM y mira el contador de **Notificaciones** en la cabecera.
+
+> **Resultado esperado**: el PM tiene una notificación nueva sobre la oferta creada; el comercial que la creó no se notifica a sí mismo. Al abrirla se marca como leída.
+
+### 19. Regla de notificación «Interna + email»
+
+Entra en **Administración > Reglas de notificación** y crea una regla nueva con canal `Interna + email`.
+
+> **Resultado esperado**: la regla se crea y muestra el aviso de que el envío por email está pendiente de configuración. No se produce ningún intento de envío real.
+
+### 20. Exportar a Excel
+
+En **Todas las ofertas**, aplica algún filtro y pulsa **Exportar a Excel**.
+
+> **Resultado esperado**: se descarga un archivo `ofertas-AAAA-MM-DD.xlsx` con tres hojas (`Ofertas`, `Jornadas`, `Historial`) que contienen únicamente las ofertas que cumplen el filtro aplicado.
+
+### 21. Administración del contador
+
+Entra en **Administración > Contador de ofertas** con una cuenta `ADMIN`. Intenta fijar un valor menor que el actual.
+
+> **Resultado esperado**: la operación se rechaza. Un valor mayor sí se acepta, con una confirmación que muestra el valor anterior y el nuevo.
+
 ## Qué no incluye esta entrega
 
 Para evitar confusiones durante la prueba, estas cosas **no** existen todavía, de forma deliberada:
 
-- No hay login ni usuarios: la aplicación es **solo para uso local** y las pantallas de Administración no están restringidas a nadie.
-- La aplicación registra qué cambió y cuándo, pero **no puede saber quién** lo cambió, porque no hay usuarios.
-- No se puede borrar ninguna oferta, cliente, persona ni valor de catálogo: solo desactivarlos.
-- No hay reglas sobre qué estados pueden seguir a cuáles, ni correos automáticos, ni exportación a Excel, ni importación del histórico.
-- No existe pantalla para ajustar el contador de numeración.
+- SSO, Azure AD, OAuth, LDAP ni recuperación de contraseña por email: la autenticación es local y provisional (`DEC-019`).
+- Envío real de correo: el canal «Interna + email» de las reglas de notificación no envía ni simula ningún email.
+- Restauración de una versión antigua de una oferta a partir del historial.
+- Borrado físico de ofertas, comentarios, adjuntos, auditoría o versiones desde la interfaz: solo archivo lógico y desactivación de maestros.
+- Migración del histórico desde el Excel o SQL Server legado.
+- Despliegue, Docker o infraestructura de producción.
 
 ## Comandos disponibles
 
@@ -233,7 +316,8 @@ Para evitar confusiones durante la prueba, estas cosas **no** existen todavía, 
 | `npm run test` | Ejecuta las pruebas automatizadas mínimas del proyecto. |
 | `npm run db:generate` | Genera el cliente Prisma a partir del esquema. |
 | `npm run db:migrate` | Aplica las migraciones de base de datos en desarrollo. |
-| `npm run db:seed` | Carga (de forma idempotente) los maestros de referencia. |
+| `npm run db:seed` | Carga (de forma idempotente) los maestros de referencia, las personas autorizadas y las reglas de notificación iniciales. |
+| `npm run auth:bootstrap-admin` | Crea (de forma idempotente) la cuenta de administrador inicial. |
 
 ## Historial de entregas
 

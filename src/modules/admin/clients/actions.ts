@@ -4,13 +4,20 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
 import { isUniqueConstraintError, toSafeErrorMessage } from "@/lib/db/errors";
 import { normalizeNameKey } from "@/lib/text";
-import { checkField, readString, requiredText, type FieldErrors } from "@/lib/validation";
+import {
+  checkField,
+  readString,
+  requiredExactText,
+  requiredText,
+  type FieldErrors,
+} from "@/lib/validation";
 import { recordAudit } from "@/modules/audit/audit";
 import {
   adminError,
   adminSuccess,
   type AdminActionState,
 } from "@/modules/admin/action-state";
+import { requireAdmin } from "@/modules/auth/session";
 
 /**
  * Administración del maestro de clientes.
@@ -21,12 +28,15 @@ import {
  */
 
 const CLIENT_NAME_MAX_LENGTH = 200;
+const CLIENT_CODE_MAX_LENGTH = 50;
 const DUPLICATE_MESSAGE = "Ya existe un cliente con ese nombre.";
+const DUPLICATE_CODE_MESSAGE = "Ya existe un cliente con ese código.";
 
 export async function createClientAction(
   _previousState: AdminActionState,
   formData: FormData,
 ): Promise<AdminActionState> {
+  const admin = await requireAdmin();
   const errors: FieldErrors = {};
   const name = checkField(
     errors,
@@ -34,22 +44,31 @@ export async function createClientAction(
     requiredText("El nombre del cliente", CLIENT_NAME_MAX_LENGTH),
     readString(formData, "name"),
   );
+  // Obligatorio al crear (DEC: código de cliente). Solo se recortan espacios
+  // exteriores; se conserva exactamente la capitalización del usuario.
+  const code = checkField(
+    errors,
+    "code",
+    requiredExactText("El código del cliente", CLIENT_CODE_MAX_LENGTH),
+    readString(formData, "code"),
+  );
 
-  if (name === undefined) {
+  if (name === undefined || code === undefined) {
     return adminError(errors);
   }
 
   try {
     const created = await prisma.$transaction(async (tx) => {
       const client = await tx.client.create({
-        data: { name, nameNormalized: normalizeNameKey(name) },
+        data: { name, code, nameNormalized: normalizeNameKey(name) },
         select: { id: true, name: true },
       });
       await recordAudit(tx, {
         entityType: "Client",
         entityId: client.id,
         action: "CREATE",
-        changes: { name: client.name, isActive: true },
+        actorId: admin.id,
+        changes: { name: client.name, code, isActive: true },
       });
       return client;
     });
@@ -60,6 +79,9 @@ export async function createClientAction(
     if (isUniqueConstraintError(error, "name_normalized")) {
       return adminError({ name: DUPLICATE_MESSAGE });
     }
+    if (isUniqueConstraintError(error, "clients_code_key")) {
+      return adminError({ code: DUPLICATE_CODE_MESSAGE });
+    }
     return adminError({ _form: toSafeErrorMessage(error) });
   }
 }
@@ -68,6 +90,7 @@ export async function updateClientAction(
   _previousState: AdminActionState,
   formData: FormData,
 ): Promise<AdminActionState> {
+  const admin = await requireAdmin();
   const id = readString(formData, "id");
   if (!id) {
     return adminError({ _form: "No se ha podido identificar el cliente." });
@@ -80,8 +103,16 @@ export async function updateClientAction(
     requiredText("El nombre del cliente", CLIENT_NAME_MAX_LENGTH),
     readString(formData, "name"),
   );
+  // Obligatorio también al guardar la edición: un cliente legado sin código
+  // ("Código pendiente") no puede volver a guardarse sin informarlo.
+  const code = checkField(
+    errors,
+    "code",
+    requiredExactText("El código del cliente", CLIENT_CODE_MAX_LENGTH),
+    readString(formData, "code"),
+  );
 
-  if (name === undefined) {
+  if (name === undefined || code === undefined) {
     return adminError(errors, id);
   }
 
@@ -89,24 +120,28 @@ export async function updateClientAction(
     const result = await prisma.$transaction(async (tx) => {
       const current = await tx.client.findUnique({
         where: { id },
-        select: { name: true },
+        select: { name: true, code: true },
       });
       if (!current) {
         return null;
       }
-      if (current.name === name) {
+      if (current.name === name && current.code === code) {
         return { name, unchanged: true as const };
       }
 
       await tx.client.update({
         where: { id },
-        data: { name, nameNormalized: normalizeNameKey(name) },
+        data: { name, code, nameNormalized: normalizeNameKey(name) },
       });
       await recordAudit(tx, {
         entityType: "Client",
         entityId: id,
         action: "UPDATE",
-        changes: { name: { antes: current.name, despues: name } },
+        actorId: admin.id,
+        changes: {
+          name: { antes: current.name, despues: name },
+          code: { antes: current.code, despues: code },
+        },
       });
       return { name, unchanged: false as const };
     });
@@ -126,6 +161,9 @@ export async function updateClientAction(
     if (isUniqueConstraintError(error, "name_normalized")) {
       return adminError({ name: DUPLICATE_MESSAGE }, id);
     }
+    if (isUniqueConstraintError(error, "clients_code_key")) {
+      return adminError({ code: DUPLICATE_CODE_MESSAGE }, id);
+    }
     return adminError({ _form: toSafeErrorMessage(error) }, id);
   }
 }
@@ -134,6 +172,7 @@ export async function setClientActiveAction(
   _previousState: AdminActionState,
   formData: FormData,
 ): Promise<AdminActionState> {
+  const admin = await requireAdmin();
   const id = readString(formData, "id");
   const isActive = readString(formData, "isActive") === "true";
 
@@ -159,6 +198,7 @@ export async function setClientActiveAction(
         entityType: "Client",
         entityId: id,
         action: isActive ? "ACTIVATE" : "DEACTIVATE",
+        actorId: admin.id,
         changes: { isActive: { antes: current.isActive, despues: isActive } },
       });
       return { name: current.name, changed: true as const };

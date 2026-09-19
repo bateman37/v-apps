@@ -11,7 +11,7 @@ import {
   type OfferSortField,
   type SelectOption,
 } from "@/modules/offers/data";
-import { buildOffersUrl, nextSortDirection } from "@/modules/offers/list-url";
+import { buildOffersExportUrl, buildOffersUrl, nextSortDirection } from "@/modules/offers/list-url";
 
 /**
  * Pantalla «Todas las ofertas». Es un componente de servidor: la búsqueda, los
@@ -61,12 +61,25 @@ export function OffersListScreen({
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title="Gestor de Ofertas"
-        subtitle="Todas las ofertas registradas en PostgreSQL."
+        title={filters.scope === "archivadas" ? "Ofertas archivadas" : "Gestor de Ofertas"}
+        subtitle={
+          filters.scope === "archivadas"
+            ? "Eliminación lógica (DEC-016): nada se ha borrado. Puedes consultarlas y recuperarlas."
+            : "Todas las ofertas registradas en PostgreSQL."
+        }
         actions={
-          <Link className="v-btn v-btn-primary" href="/offers/new">
-            Nueva oferta
-          </Link>
+          <>
+            {result.total > 0 ? (
+              <a className="v-btn v-btn-secondary" href={buildOffersExportUrl(filters)}>
+                Exportar a Excel
+              </a>
+            ) : null}
+            {filters.scope !== "archivadas" ? (
+              <Link className="v-btn v-btn-primary" href="/offers/new">
+                Nueva oferta
+              </Link>
+            ) : null}
+          </>
         }
       />
 

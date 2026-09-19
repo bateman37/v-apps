@@ -34,7 +34,7 @@ export function ClientsScreen({
     <div className="flex flex-col gap-6">
       <AdminCard
         title="Nuevo cliente"
-        description="Solo se pide el nombre. Todavía no existen códigos corporativos, grupos ni datos fiscales."
+        description="El código y el nombre son obligatorios. No existe todavía grupo de cliente ni datos fiscales."
       >
         <CreateClientForm action={createAction} />
       </AdminCard>
@@ -43,7 +43,7 @@ export function ClientsScreen({
         <form method="get" action="/admin/clients" className="mb-4 flex flex-wrap items-end gap-3">
           <div className="grow sm:max-w-xs">
             <label className="v-label" htmlFor="q">
-              Buscar por nombre
+              Buscar por nombre o código
             </label>
             <input
               id="q"
@@ -82,6 +82,7 @@ export function ClientsScreen({
             <table className="v-table">
               <thead>
                 <tr>
+                  <th scope="col">Código</th>
                   <th scope="col">Nombre</th>
                   <th scope="col">Estado</th>
                   <th scope="col" className="text-right">
@@ -93,6 +94,22 @@ export function ClientsScreen({
               <tbody>
                 {clients.map((client) => (
                   <tr key={client.id}>
+                    <td className="min-w-[10rem]">
+                      {client.code === null ? (
+                        <span
+                          className="v-badge"
+                          style={{
+                            backgroundColor: "var(--color-warning-soft)",
+                            borderColor: "var(--color-warning)",
+                            color: "var(--color-warning)",
+                          }}
+                        >
+                          Código pendiente
+                        </span>
+                      ) : (
+                        <span className="v-num">{client.code}</span>
+                      )}
+                    </td>
                     <td className="min-w-[16rem]">
                       <EditClientForm action={updateAction} client={client} />
                     </td>
@@ -125,6 +142,17 @@ function CreateClientForm({ action }: { action: AdminAction }) {
 
   return (
     <form action={formAction} noValidate className="flex flex-wrap items-end gap-3">
+      <div className="sm:w-40">
+        <FormField id="new-client-code" label="Código" required error={state.errors.code}>
+          <input
+            id="new-client-code"
+            name="code"
+            type="text"
+            className="v-input"
+            {...fieldAria("new-client-code", state.errors.code)}
+          />
+        </FormField>
+      </div>
       <div className="grow sm:max-w-md">
         <FormField id="new-client-name" label="Nombre del cliente" required error={state.errors.name}>
           <input
@@ -152,28 +180,47 @@ function EditClientForm({
   client: ClientRow;
 }) {
   const [state, formAction] = useActionState(action, INITIAL_ADMIN_ACTION_STATE);
-  const fieldId = `client-name-${client.id}`;
-  const error = state.targetId === client.id ? state.errors.name : undefined;
+  const nameFieldId = `client-name-${client.id}`;
+  const codeFieldId = `client-code-${client.id}`;
+  const isTarget = state.targetId === client.id;
+  const nameError = isTarget ? state.errors.name : undefined;
+  const codeError = isTarget ? state.errors.code : undefined;
 
   return (
     <form action={formAction} noValidate className="flex flex-wrap items-center gap-2">
       <input type="hidden" name="id" value={client.id} />
-      <label className="sr-only" htmlFor={fieldId}>
+      <label className="sr-only" htmlFor={codeFieldId}>
+        Código del cliente
+      </label>
+      <input
+        id={codeFieldId}
+        name="code"
+        type="text"
+        className="v-input max-w-[8rem]"
+        defaultValue={client.code ?? ""}
+        placeholder="Código pendiente"
+        {...fieldAria(codeFieldId, codeError)}
+      />
+      <label className="sr-only" htmlFor={nameFieldId}>
         Nombre del cliente
       </label>
       <input
-        id={fieldId}
+        id={nameFieldId}
         name="name"
         type="text"
         className="v-input max-w-xs"
         defaultValue={client.name}
-        {...fieldAria(fieldId, error)}
+        {...fieldAria(nameFieldId, nameError)}
       />
       <AdminSubmit>Guardar</AdminSubmit>
       <div className="w-full">
-        {error ? (
+        {codeError ? (
           <span className="v-field-error" role="alert">
-            {error}
+            {codeError}
+          </span>
+        ) : nameError ? (
+          <span className="v-field-error" role="alert">
+            {nameError}
           </span>
         ) : (
           <AdminFeedback state={state} />

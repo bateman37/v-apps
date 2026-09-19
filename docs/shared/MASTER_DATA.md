@@ -8,9 +8,18 @@ Los maestros son administrables únicamente por usuarios autorizados. Los regist
 
 No se modelan `Comercial` y `PM` como entidades independientes. Existe un único maestro de personas (`Person`), y cada persona puede estar habilitada como comercial, como PM, o como ambas cosas simultáneamente. Ver relación con `Offer` en [`../architecture/DATA_MODEL.md`](../architecture/DATA_MODEL.md).
 
+## Código de cliente (DEC-021)
+
+Desde DEV-004, `Client.code` es obligatorio y único al crear o editar un cliente en `/admin/clients`:
+
+- Solo se recortan los espacios exteriores; se conserva exactamente la capitalización escrita.
+- Los clientes existentes de DEV-003 se migraron con el código en `null` y se muestran con el aviso «Código pendiente»; no pueden guardarse de nuevo sin informarlo.
+- Un cliente activo sin código no puede elegirse al crear una oferta nueva, pero una oferta histórica que ya lo use sigue siendo consultable y editable sin exigir el código.
+- La búsqueda en `/admin/clients` encuentra por nombre o por código.
+
 ## Maestros conocidos del Gestor de Ofertas
 
-- **Clientes**.
+- **Clientes** (ver código de cliente más arriba).
 - **Personas** (ver principio anterior).
 - **Perfiles profesionales**: ver tabla completa en [`../offers/BUSINESS_RULES.md`](../offers/BUSINESS_RULES.md).
 - **Prioridades**: valores actuales conocidos: Alta, Media, Baja.

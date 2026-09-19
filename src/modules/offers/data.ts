@@ -2,6 +2,14 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { toDateInputValue } from "@/lib/format";
 import {
+  canAccessOffer,
+  isAdmin,
+  PENDING_PM_REVIEW_STATUS_CODE,
+  PENDING_SALES_REVIEW_STATUS_CODE,
+  type AuthenticatedUser,
+} from "@/modules/auth/identity";
+import {
+  ACCEPTED_STATUS_CODE,
   CANCELLED_STATUS_CODE,
   totalProfileDays,
 } from "@/modules/offers/validation";
@@ -41,6 +49,8 @@ export type OfferFormOptions = {
   professionalProfiles: ProfileOption[];
   /** Estados con código `CANCELLED`: obligan a informar el motivo. */
   cancelledStatusIds: string[];
+  /** Estados con código `ACCEPTED`: obligan a informar el pedido Navision. */
+  acceptedStatusIds: string[];
   /** Si no hay ninguno activo, la interfaz avisa en lugar de inventar uno. */
   hasActiveCancellationReasons: boolean;
 };
@@ -117,9 +127,18 @@ export async function getOfferFormOptions(
     professionalProfiles,
     activeCancellationReasonCount,
   ] = await Promise.all([
+    // Un cliente activo **sin código** no puede elegirse para una oferta
+    // nueva (DEV-004). El que ya usa la oferta que se edita sí se conserva:
+    // una modificación no relacionada no debe bloquearse ni inventar un
+    // código para un cliente heredado de DEV-003.
     prisma.client.findMany({
-      where: activeOrReferenced([referenced.clientId]),
-      select: CATALOG_SELECT,
+      where: {
+        OR: [
+          { isActive: true, code: { not: null } },
+          ...(referenced.clientId ? [{ id: referenced.clientId }] : []),
+        ],
+      },
+      select: { ...CATALOG_SELECT, code: true },
       orderBy: { name: "asc" },
     }),
     prisma.priority.findMany({
@@ -182,7 +201,16 @@ export async function getOfferFormOptions(
   ]);
 
   return {
-    clients: toOptions(clients),
+    clients: clients.map((client) => ({
+      id: client.id,
+      label: [
+        client.code ? `${client.code} · ` : "",
+        client.name,
+        client.isActive ? "" : " (inactivo)",
+        client.code ? "" : " (código pendiente)",
+      ].join(""),
+      isActive: client.isActive,
+    })),
     priorities: toOptions(priorities),
     origins: toOptions(origins),
     offerTypes: toOptions(offerTypes),
@@ -195,6 +223,9 @@ export async function getOfferFormOptions(
     professionalProfiles,
     cancelledStatusIds: statuses
       .filter((status) => status.code === CANCELLED_STATUS_CODE)
+      .map((status) => status.id),
+    acceptedStatusIds: statuses
+      .filter((status) => status.code === ACCEPTED_STATUS_CODE)
       .map((status) => status.id),
     hasActiveCancellationReasons: activeCancellationReasonCount > 0,
   };
@@ -212,12 +243,35 @@ export type OfferStatusHistoryEntry = {
   previousStatusName: string | null;
   newStatusName: string;
   changedAt: string;
+  /** Nombre de la persona que lo cambió, o `null` si es anterior al login. */
+  actorName: string | null;
+};
+
+export type OfferCommentEntry = {
+  id: string;
+  body: string;
+  authorName: string | null;
+  createdAt: string;
+};
+
+export type OfferAttachmentEntry = {
+  id: string;
+  originalName: string;
+  contentType: string;
+  sizeBytes: number;
+  uploadedByName: string | null;
+  createdAt: string;
+  removedAt: string | null;
+  removedByName: string | null;
+  /** El usuario en curso puede retirarlo (es su autor o es administrador). */
+  canRemove: boolean;
 };
 
 export type OfferDetail = {
   id: string;
   number: string;
   clientId: string;
+  clientCode: string | null;
   clientName: string;
   priorityId: string;
   priorityName: string;
@@ -251,18 +305,68 @@ export type OfferDetail = {
   navisionOrder: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Archivo lógico (DEC-016). `null` significa oferta activa. */
+  archivedAt: string | null;
+  archivedByName: string | null;
+  restoredAt: string | null;
+  restoredByName: string | null;
+  createdById: string | null;
+  createdByName: string | null;
   profileDays: OfferProfileDaysDetail[];
   totalProfileDays: string;
   statusHistory: OfferStatusHistoryEntry[];
+  comments: OfferCommentEntry[];
+  attachments: OfferAttachmentEntry[];
+  /** El usuario en curso puede modificar y archivar/recuperar esta oferta. */
+  canModify: boolean;
 };
 
-/** Detalle completo de una oferta, o `null` si no existe o está eliminada. */
-export async function getOfferDetail(id: string): Promise<OfferDetail | null> {
+/**
+ * Detalle completo de una oferta, o `null` si no existe **o si el usuario no
+ * puede verla**. Ambas situaciones devuelven lo mismo a propósito: la
+ * respuesta no revela la existencia de una oferta ajena.
+ *
+ * A diferencia de DEV-003, las ofertas archivadas **sí** se devuelven: se
+ * consultan en modo seguro y la pantalla ofrece recuperarlas.
+ */
+export async function getOfferDetail(
+  id: string,
+  user: AuthenticatedUser,
+): Promise<OfferDetail | null> {
   const offer = await prisma.offer.findFirst({
-    where: { id, deletedAt: null },
+    where: { id },
     select: {
       id: true,
       number: true,
+      deletedAt: true,
+      restoredAt: true,
+      createdById: true,
+      archivedBy: { select: { person: { select: { name: true } } } },
+      restoredBy: { select: { person: { select: { name: true } } } },
+      createdBy: { select: { person: { select: { name: true } } } },
+      comments: {
+        select: {
+          id: true,
+          body: true,
+          createdAt: true,
+          author: { select: { person: { select: { name: true } } } },
+        },
+        orderBy: { createdAt: "desc" },
+      },
+      attachments: {
+        select: {
+          id: true,
+          originalName: true,
+          contentType: true,
+          sizeBytes: true,
+          createdAt: true,
+          removedAt: true,
+          uploadedById: true,
+          uploadedBy: { select: { person: { select: { name: true } } } },
+          removedBy: { select: { person: { select: { name: true } } } },
+        },
+        orderBy: { createdAt: "desc" },
+      },
       clientId: true,
       priorityId: true,
       commercialId: true,
@@ -286,7 +390,7 @@ export async function getOfferDetail(id: string): Promise<OfferDetail | null> {
       navisionOrder: true,
       createdAt: true,
       updatedAt: true,
-      client: { select: { name: true } },
+      client: { select: { name: true, code: true } },
       priority: { select: { name: true } },
       commercial: { select: { name: true } },
       projectManager: { select: { name: true } },
@@ -309,6 +413,7 @@ export async function getOfferDetail(id: string): Promise<OfferDetail | null> {
           changedAt: true,
           previousStatus: { select: { name: true } },
           newStatus: { select: { name: true } },
+          actor: { select: { person: { select: { name: true } } } },
         },
         orderBy: { changedAt: "desc" },
       },
@@ -316,6 +421,18 @@ export async function getOfferDetail(id: string): Promise<OfferDetail | null> {
   });
 
   if (!offer) {
+    return null;
+  }
+
+  // Autorización de lectura: la misma regla que aplican las mutaciones, el
+  // listado, la exportación y las descargas.
+  if (
+    !canAccessOffer(user, {
+      createdById: offer.createdById,
+      commercialId: offer.commercialId,
+      projectManagerId: offer.projectManagerId,
+    })
+  ) {
     return null;
   }
 
@@ -339,6 +456,7 @@ export async function getOfferDetail(id: string): Promise<OfferDetail | null> {
     id: offer.id,
     number: offer.number,
     clientId: offer.clientId,
+    clientCode: offer.client.code,
     clientName: offer.client.name,
     priorityId: offer.priorityId,
     priorityName: offer.priority.name,
@@ -376,12 +494,41 @@ export async function getOfferDetail(id: string): Promise<OfferDetail | null> {
     updatedAt: offer.updatedAt.toISOString(),
     profileDays,
     totalProfileDays: totalProfileDays(profileDays),
+    archivedAt: offer.deletedAt?.toISOString() ?? null,
+    archivedByName: offer.archivedBy?.person.name ?? null,
+    restoredAt: offer.restoredAt?.toISOString() ?? null,
+    restoredByName: offer.restoredBy?.person.name ?? null,
+    createdById: offer.createdById,
+    createdByName: offer.createdBy?.person.name ?? null,
     statusHistory: offer.statusHistory.map((entry) => ({
       id: entry.id,
       previousStatusName: entry.previousStatus?.name ?? null,
       newStatusName: entry.newStatus.name,
       changedAt: entry.changedAt.toISOString(),
+      actorName: entry.actor?.person.name ?? null,
     })),
+    comments: offer.comments.map((comment) => ({
+      id: comment.id,
+      body: comment.body,
+      authorName: comment.author?.person.name ?? null,
+      createdAt: comment.createdAt.toISOString(),
+    })),
+    attachments: offer.attachments.map((attachment) => ({
+      id: attachment.id,
+      originalName: attachment.originalName,
+      contentType: attachment.contentType,
+      sizeBytes: attachment.sizeBytes,
+      uploadedByName: attachment.uploadedBy?.person.name ?? null,
+      createdAt: attachment.createdAt.toISOString(),
+      removedAt: attachment.removedAt?.toISOString() ?? null,
+      removedByName: attachment.removedBy?.person.name ?? null,
+      canRemove:
+        attachment.removedAt === null &&
+        (isAdmin(user) || attachment.uploadedById === user.id),
+    })),
+    // Una oferta archivada se consulta en modo seguro: para cambiar sus datos
+    // funcionales hay que recuperarla primero.
+    canModify: offer.deletedAt === null,
   };
 }
 
@@ -416,7 +563,15 @@ export type OfferListFilters = {
   sort: OfferSortField;
   dir: SortDirection;
   page: number;
+  /**
+   * Ámbito del listado. `activas` es el listado ordinario; `archivadas`
+   * muestra únicamente las ofertas archivadas (eliminación lógica, DEC-016),
+   * con la misma búsqueda, los mismos filtros y la misma exportación.
+   */
+  scope: OfferScope;
 };
+
+export type OfferScope = "activas" | "archivadas";
 
 export type RawSearchParams = Record<string, string | string[] | undefined>;
 
@@ -453,6 +608,7 @@ function readIntParam(
 export function parseOfferListParams(params: RawSearchParams): OfferListFilters {
   const sortRaw = readParam(params, "sort");
   const dirRaw = readParam(params, "dir");
+  const scopeRaw = readParam(params, "scope");
   const page = readIntParam(params, "page", 1, 100_000) ?? 1;
 
   return {
@@ -470,6 +626,7 @@ export function parseOfferListParams(params: RawSearchParams): OfferListFilters 
       : "number",
     dir: dirRaw === "asc" ? "asc" : "desc",
     page,
+    scope: scopeRaw === "archivadas" ? "archivadas" : "activas",
   };
 }
 
@@ -521,11 +678,34 @@ function dateRangeFilter(
  * cada año con ofertas. Se resuelve así, y no con una función SQL sobre la
  * columna, para que PostgreSQL pueda seguir usando el índice de `offer_date`.
  */
-function buildOfferWhere(
+/**
+ * Restricción de visibilidad aplicada a **toda** consulta de ofertas.
+ *
+ * Un `ADMIN` no añade ninguna condición. Un `USER` solo ve las ofertas de las
+ * que es creador, comercial asignado o Project Manager asignado; las ofertas
+ * anteriores al login, sin creador, solo le aparecen si le corresponden por
+ * comercial o por PM. Es la misma regla que `canAccessOffer`, expresada como
+ * condición SQL para que el filtrado ocurra en PostgreSQL y no en memoria.
+ */
+export function offerScopeWhere(user: AuthenticatedUser): Prisma.OfferWhereInput {
+  if (isAdmin(user)) {
+    return {};
+  }
+  return {
+    OR: [
+      { createdById: user.id },
+      { commercialId: user.personId },
+      { projectManagerId: user.personId },
+    ],
+  };
+}
+
+export function buildOfferWhere(
   filters: OfferListFilters,
   availableYears: readonly number[],
+  user: AuthenticatedUser,
 ): Prisma.OfferWhereInput {
-  const conditions: Prisma.OfferWhereInput[] = [];
+  const conditions: Prisma.OfferWhereInput[] = [offerScopeWhere(user)];
 
   if (filters.q) {
     conditions.push({
@@ -555,13 +735,12 @@ function buildOfferWhere(
   }
 
   const where: Prisma.OfferWhereInput = {
-    // Exclusión por defecto de la eliminación lógica (DEC-016).
-    deletedAt: null,
+    // Archivo lógico (DEC-016): el listado ordinario excluye las archivadas y
+    // la vista «Ofertas archivadas» muestra exactamente esas.
+    deletedAt: filters.scope === "archivadas" ? { not: null } : null,
   };
 
-  if (conditions.length > 0) {
-    where.AND = conditions;
-  }
+  where.AND = conditions;
 
   if (filters.clientId) {
     where.clientId = filters.clientId;
@@ -585,7 +764,7 @@ function buildOfferWhere(
   return where;
 }
 
-function buildOfferOrderBy(
+export function buildOfferOrderBy(
   filters: OfferListFilters,
 ): Prisma.OfferOrderByWithRelationInput[] {
   const dir = filters.dir;
@@ -629,12 +808,13 @@ export type OfferListResult = {
 
 export async function getOffersPage(
   filters: OfferListFilters,
+  user: AuthenticatedUser,
 ): Promise<OfferListResult> {
   // Solo hace falta conocer los años con datos cuando se filtra por mes sin
   // año; en el resto de casos no se lanza esta consulta.
   const availableYears =
     filters.month !== null && filters.year === null ? await getOfferYears() : [];
-  const where = buildOfferWhere(filters, availableYears);
+  const where = buildOfferWhere(filters, availableYears, user);
 
   const [total, amountAggregate, daysAggregate] = await Promise.all([
     prisma.offer.count({ where }),
@@ -691,7 +871,7 @@ export async function getOffersPage(
 }
 
 /** Años distintos con ofertas no eliminadas, de más reciente a más antiguo. */
-async function getOfferYears(): Promise<number[]> {
+export async function getOfferYears(): Promise<number[]> {
   const rows = await prisma.$queryRaw<Array<{ year: number }>>`
     SELECT DISTINCT EXTRACT(YEAR FROM "offer_date")::int AS year
       FROM "offers"
@@ -745,4 +925,486 @@ export async function getOfferFilterOptions(): Promise<OfferFilterOptions> {
     origins: toOptions(origins),
     years,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Condición reutilizable para la exportación
+// ---------------------------------------------------------------------------
+
+/**
+ * Misma condición que usa el listado, expuesta para que la exportación aplique
+ * **exactamente** los mismos filtros, el mismo ámbito normal/archivado y los
+ * mismos permisos. Se comparte en lugar de duplicarse para que no puedan
+ * divergir.
+ */
+export async function buildExportWhere(
+  filters: OfferListFilters,
+  user: AuthenticatedUser,
+): Promise<Prisma.OfferWhereInput> {
+  const availableYears =
+    filters.month !== null && filters.year === null ? await getOfferYears() : [];
+  return buildOfferWhere(filters, availableYears, user);
+}
+
+/** Orden determinista de la exportación, coherente con el del listado. */
+export function buildExportOrderBy(
+  filters: OfferListFilters,
+): Prisma.OfferOrderByWithRelationInput[] {
+  return buildOfferOrderBy(filters);
+}
+
+// ---------------------------------------------------------------------------
+// Bandeja «Pendiente de revisión»
+// ---------------------------------------------------------------------------
+
+export type PendingReviewKind = "PM" | "COMMERCIAL";
+
+export type PendingReviewRow = {
+  id: string;
+  number: string;
+  clientName: string;
+  description: string;
+  statusId: string;
+  statusName: string;
+  kind: PendingReviewKind;
+  commercialName: string;
+  projectManagerName: string;
+  /** Última modificación relevante: el cambio de estado que la dejó pendiente. */
+  pendingSince: string;
+  /** Días completos transcurridos desde `pendingSince`. */
+  pendingDays: number;
+};
+
+export type PendingReviewFilters = {
+  kind: PendingReviewKind | "all";
+  commercialId: string;
+  projectManagerId: string;
+  clientId: string;
+  /** Antigüedad mínima en días; `null` para no filtrar. */
+  minDays: number | null;
+};
+
+export function parsePendingReviewFilters(
+  params: RawSearchParams,
+): PendingReviewFilters {
+  const kind = readParam(params, "kind");
+  return {
+    kind: kind === "PM" || kind === "COMMERCIAL" ? kind : "all",
+    commercialId: readParam(params, "commercialId"),
+    projectManagerId: readParam(params, "projectManagerId"),
+    clientId: readParam(params, "clientId"),
+    minDays: readIntParam(params, "minDays", 0, 3650),
+  };
+}
+
+/**
+ * Ofertas pendientes de revisión.
+ *
+ * La bandeja **se deriva** del estado actual y de las asignaciones: no existe
+ * un circuito paralelo de solicitudes de aprobación.
+ *
+ * - `A valorar PM` (`TO_BE_ASSESSED_PM`) pende de su Project Manager.
+ * - `Entregado a comercial` (`DELIVERED_TO_SALES`) pende de su comercial.
+ * - Una persona habilitada como PM y como comercial ve la unión **sin
+ *   duplicados**: cada oferta aparece una sola vez, con el tipo que
+ *   corresponde a su estado.
+ * - Un administrador ve todas y puede filtrarlas.
+ * - Las ofertas archivadas no aparecen en la bandeja activa.
+ */
+export async function getPendingReviewOffers(
+  user: AuthenticatedUser,
+  filters: PendingReviewFilters,
+): Promise<PendingReviewRow[]> {
+  const statuses = await prisma.offerStatus.findMany({
+    where: {
+      code: { in: [PENDING_PM_REVIEW_STATUS_CODE, PENDING_SALES_REVIEW_STATUS_CODE] },
+    },
+    select: { id: true, code: true, name: true },
+  });
+
+  const pmStatus = statuses.find(
+    (status) => status.code === PENDING_PM_REVIEW_STATUS_CODE,
+  );
+  const salesStatus = statuses.find(
+    (status) => status.code === PENDING_SALES_REVIEW_STATUS_CODE,
+  );
+
+  const branches: Prisma.OfferWhereInput[] = [];
+
+  if (pmStatus && (filters.kind === "all" || filters.kind === "PM")) {
+    branches.push({
+      statusId: pmStatus.id,
+      // Un usuario normal solo ve las suyas; el administrador, todas.
+      ...(isAdmin(user) ? {} : { projectManagerId: user.personId }),
+    });
+  }
+  if (salesStatus && (filters.kind === "all" || filters.kind === "COMMERCIAL")) {
+    branches.push({
+      statusId: salesStatus.id,
+      ...(isAdmin(user) ? {} : { commercialId: user.personId }),
+    });
+  }
+
+  if (branches.length === 0) {
+    return [];
+  }
+
+  const where: Prisma.OfferWhereInput = {
+    deletedAt: null,
+    OR: branches,
+  };
+
+  if (filters.commercialId) {
+    where.commercialId = filters.commercialId;
+  }
+  if (filters.projectManagerId) {
+    where.projectManagerId = filters.projectManagerId;
+  }
+  if (filters.clientId) {
+    where.clientId = filters.clientId;
+  }
+
+  const offers = await prisma.offer.findMany({
+    where,
+    select: {
+      id: true,
+      number: true,
+      description: true,
+      statusId: true,
+      updatedAt: true,
+      client: { select: { name: true } },
+      commercial: { select: { name: true } },
+      projectManager: { select: { name: true } },
+      status: { select: { name: true } },
+      statusHistory: {
+        select: { changedAt: true },
+        orderBy: { changedAt: "desc" },
+        take: 1,
+      },
+    },
+    orderBy: { updatedAt: "asc" },
+  });
+
+  const now = Date.now();
+
+  return offers
+    .map((offer) => {
+      const pendingSince = offer.statusHistory[0]?.changedAt ?? offer.updatedAt;
+      const pendingDays = Math.max(
+        0,
+        Math.floor((now - pendingSince.getTime()) / (24 * 60 * 60 * 1000)),
+      );
+      const kind: PendingReviewKind =
+        offer.statusId === pmStatus?.id ? "PM" : "COMMERCIAL";
+      return {
+        id: offer.id,
+        number: offer.number,
+        clientName: offer.client.name,
+        description: offer.description,
+        statusId: offer.statusId,
+        statusName: offer.status.name,
+        kind,
+        commercialName: offer.commercial.name,
+        projectManagerName: offer.projectManager.name,
+        pendingSince: pendingSince.toISOString(),
+        pendingDays,
+      };
+    })
+    .filter((row) => filters.minDays === null || row.pendingDays >= filters.minDays);
+}
+
+export type ReviewStatusOption = { id: string; name: string; code: string };
+
+/**
+ * Estados activos seleccionables al completar una revisión (bloque 8.3).
+ *
+ * `CANCELLED` se excluye a propósito: anular exige motivo de cancelación, que
+ * esta pantalla no pide, así que `reviewOfferAction` remite al formulario
+ * completo si se elige igualmente. No repetir esa regla aquí evita que las
+ * dos listas de exclusión diverjan.
+ */
+export async function getReviewStatusOptions(): Promise<ReviewStatusOption[]> {
+  const statuses = await prisma.offerStatus.findMany({
+    where: { isActive: true, code: { not: CANCELLED_STATUS_CODE } },
+    select: { id: true, name: true, code: true },
+    orderBy: CATALOG_ORDER,
+  });
+  return statuses;
+}
+
+// ---------------------------------------------------------------------------
+// Auditoría, versiones y línea temporal de una oferta
+// ---------------------------------------------------------------------------
+
+export type OfferVersionSummary = {
+  version: number;
+  createdAt: string;
+  authorName: string | null;
+};
+
+export type TraceEventKind =
+  | "VERSION"
+  | "STATUS"
+  | "COMMENT"
+  | "ATTACHMENT"
+  | "ARCHIVE"
+  | "AUDIT";
+
+export type OfferTraceEvent = {
+  id: string;
+  kind: TraceEventKind;
+  at: string;
+  authorName: string | null;
+  action: string;
+  detail: string | null;
+  version: number | null;
+  previousStatusName: string | null;
+  newStatusName: string | null;
+  changedFields: string[];
+};
+
+export type OfferTrace = {
+  versions: OfferVersionSummary[];
+  events: OfferTraceEvent[];
+};
+
+const AUDIT_ACTION_LABELS: Record<string, string> = {
+  CREATE: "Alta de la oferta",
+  UPDATE: "Modificación",
+  STATUS_CHANGE: "Cambio de estado",
+  REVIEW: "Revisión completada",
+  ARCHIVE: "Archivada",
+  RESTORE: "Recuperada",
+  COMMENT: "Comentario añadido",
+  ATTACHMENT_ADDED: "Adjunto añadido",
+  ATTACHMENT_REMOVED: "Adjunto retirado",
+};
+
+/** Nombres legibles de los campos que la auditoría guarda por identificador. */
+const AUDIT_FIELD_LABELS: Record<string, string> = {
+  clientId: "Cliente",
+  priorityId: "Prioridad",
+  commercialId: "Comercial",
+  projectManagerId: "Project Manager",
+  originId: "Origen",
+  offerTypeId: "Tipo de oferta",
+  statusId: "Estado",
+  segmentationId: "Segmentación",
+  languageId: "Idioma",
+  cancellationReasonId: "Motivo de cancelación",
+  offerDate: "Fecha de la oferta",
+  description: "Descripción",
+  requesterName: "Solicitante",
+  totalAmount: "Importe total",
+  implantationText: "Implantación",
+  estimatedCommercialDeliveryDate: "Fecha estimada de entrega comercial",
+  estimatedClientDeliveryDate: "Fecha estimada de entrega al cliente",
+  estimatedPortfolioDate: "Fecha estimada de cartera",
+  commercialDays: "Jornadas comerciales",
+  notes: "Observaciones",
+  navisionOrder: "Pedido de Navision",
+  profileDays: "Jornadas por perfil",
+  estado: "Estado",
+  archivada: "Archivada",
+};
+
+/** Lista de campos modificados, legible y sin volcar JSON técnico en bruto. */
+export function changedFieldsOf(changes: unknown): string[] {
+  if (typeof changes !== "object" || changes === null || Array.isArray(changes)) {
+    return [];
+  }
+  return Object.keys(changes)
+    .filter((key) => key !== "number" && key !== "numero")
+    .map((key) => AUDIT_FIELD_LABELS[key] ?? key);
+}
+
+/**
+ * Línea temporal completa de una oferta: versiones, cambios de estado,
+ * comentarios y eventos auditables de adjuntos, archivo y recuperación.
+ *
+ * Para no mostrar dos veces el mismo hecho, los eventos de auditoría cuyo
+ * contenido ya se presenta con más detalle desde su tabla propia —el alta, el
+ * cambio de estado, el comentario y los adjuntos— se omiten de la parte
+ * genérica.
+ */
+export async function getOfferTrace(offerId: string): Promise<OfferTrace> {
+  const [versions, statusHistory, comments, attachments, audits] = await Promise.all([
+    prisma.offerVersion.findMany({
+      where: { offerId },
+      select: {
+        version: true,
+        createdAt: true,
+        author: { select: { person: { select: { name: true } } } },
+      },
+      orderBy: { version: "desc" },
+    }),
+    prisma.offerStatusHistory.findMany({
+      where: { offerId },
+      select: {
+        id: true,
+        changedAt: true,
+        previousStatus: { select: { name: true } },
+        newStatus: { select: { name: true } },
+        actor: { select: { person: { select: { name: true } } } },
+      },
+      orderBy: { changedAt: "desc" },
+    }),
+    prisma.offerComment.findMany({
+      where: { offerId },
+      select: {
+        id: true,
+        body: true,
+        createdAt: true,
+        author: { select: { person: { select: { name: true } } } },
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.offerAttachment.findMany({
+      where: { offerId },
+      select: {
+        id: true,
+        originalName: true,
+        createdAt: true,
+        removedAt: true,
+        uploadedBy: { select: { person: { select: { name: true } } } },
+        removedBy: { select: { person: { select: { name: true } } } },
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.auditLog.findMany({
+      where: {
+        entityType: "Offer",
+        entityId: offerId,
+        action: { in: ["UPDATE", "REVIEW", "ARCHIVE", "RESTORE"] },
+      },
+      select: {
+        id: true,
+        action: true,
+        changes: true,
+        createdAt: true,
+        actor: { select: { person: { select: { name: true } } } },
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+  ]);
+
+  const events: OfferTraceEvent[] = [];
+
+  for (const version of versions) {
+    events.push({
+      id: `version-${version.version}`,
+      kind: "VERSION",
+      at: version.createdAt.toISOString(),
+      authorName: version.author?.person.name ?? null,
+      action: `Versión ${version.version}`,
+      detail: null,
+      version: version.version,
+      previousStatusName: null,
+      newStatusName: null,
+      changedFields: [],
+    });
+  }
+
+  for (const entry of statusHistory) {
+    events.push({
+      id: `status-${entry.id}`,
+      kind: "STATUS",
+      at: entry.changedAt.toISOString(),
+      authorName: entry.actor?.person.name ?? null,
+      action: entry.previousStatus ? "Cambio de estado" : "Alta de la oferta",
+      detail: null,
+      version: null,
+      previousStatusName: entry.previousStatus?.name ?? null,
+      newStatusName: entry.newStatus.name,
+      changedFields: [],
+    });
+  }
+
+  for (const comment of comments) {
+    events.push({
+      id: `comment-${comment.id}`,
+      kind: "COMMENT",
+      at: comment.createdAt.toISOString(),
+      authorName: comment.author?.person.name ?? null,
+      action: "Comentario añadido",
+      detail: comment.body,
+      version: null,
+      previousStatusName: null,
+      newStatusName: null,
+      changedFields: [],
+    });
+  }
+
+  for (const attachment of attachments) {
+    events.push({
+      id: `attachment-add-${attachment.id}`,
+      kind: "ATTACHMENT",
+      at: attachment.createdAt.toISOString(),
+      authorName: attachment.uploadedBy?.person.name ?? null,
+      action: "Adjunto añadido",
+      detail: attachment.originalName,
+      version: null,
+      previousStatusName: null,
+      newStatusName: null,
+      changedFields: [],
+    });
+    if (attachment.removedAt) {
+      events.push({
+        id: `attachment-remove-${attachment.id}`,
+        kind: "ATTACHMENT",
+        at: attachment.removedAt.toISOString(),
+        authorName: attachment.removedBy?.person.name ?? null,
+        action: "Adjunto retirado",
+        detail: attachment.originalName,
+        version: null,
+        previousStatusName: null,
+        newStatusName: null,
+        changedFields: [],
+      });
+    }
+  }
+
+  for (const audit of audits) {
+    events.push({
+      id: `audit-${audit.id}`,
+      kind:
+        audit.action === "ARCHIVE" || audit.action === "RESTORE" ? "ARCHIVE" : "AUDIT",
+      at: audit.createdAt.toISOString(),
+      authorName: audit.actor?.person.name ?? null,
+      action: AUDIT_ACTION_LABELS[audit.action] ?? audit.action,
+      detail: null,
+      version: null,
+      previousStatusName: null,
+      newStatusName: null,
+      changedFields: changedFieldsOf(audit.changes),
+    });
+  }
+
+  events.sort((left, right) => right.at.localeCompare(left.at));
+
+  return {
+    versions: versions.map((version) => ({
+      version: version.version,
+      createdAt: version.createdAt.toISOString(),
+      authorName: version.author?.person.name ?? null,
+    })),
+    events,
+  };
+}
+
+/** Instantáneas de dos versiones concretas, para compararlas. */
+export async function getOfferVersionSnapshots(
+  offerId: string,
+  versions: number[],
+) {
+  return prisma.offerVersion.findMany({
+    where: { offerId, version: { in: versions } },
+    select: {
+      version: true,
+      createdAt: true,
+      snapshot: true,
+      author: { select: { person: { select: { name: true } } } },
+    },
+    orderBy: { version: "asc" },
+  });
 }

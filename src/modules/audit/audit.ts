@@ -1,31 +1,55 @@
 import type { Prisma } from "@prisma/client";
 
 /**
- * Auditoría mínima real de la plataforma.
+ * Auditoría técnica de la plataforma.
  *
- * Limitación conocida y documentada: mientras la autenticación siga
- * pospuesta (DEC-019), `actorId` es siempre `null`. No se inventa ningún
- * usuario `admin`, `system` ni una identidad temporal, de modo que la
- * atribución de los cambios registrados en esta fase es desconocida. Ver
+ * Desde DEV-004 cada entrada puede relacionarse con el **usuario autenticado**
+ * que la provocó. `actorId` sigue siendo nullable por dos motivos legítimos:
+ *
+ * 1. Los registros creados antes de que existiera el login se conservan
+ *    íntegros y se muestran como «Usuario no disponible (registro anterior al
+ *    login)». No se reescribe el pasado ni se inventa un actor.
+ * 2. Un proceso de línea de comandos (carga inicial, bootstrap) no actúa en
+ *    nombre de ninguna persona.
+ *
+ * `changes` guarda exclusivamente valores de negocio en la forma
+ * `{ campo: { antes, despues } }`. Nunca contraseñas, hashes, tokens de
+ * sesión, cookies, contenido binario ni rutas físicas del servidor. Ver
  * docs/architecture/SECURITY.md.
  *
- * `changes` guarda exclusivamente valores de negocio (nombres, importes,
- * identificadores de maestro). Nunca credenciales, cadenas de conexión ni
- * detalles técnicos del motor.
+ * La auditoría es **append-only** desde la aplicación: no existe ninguna
+ * función que actualice ni borre una entrada.
  */
 
 export type AuditEntityType =
   | "Offer"
+  | "OfferComment"
+  | "OfferAttachment"
   | "Client"
   | "Person"
-  | "MasterDataRecord";
+  | "MasterDataRecord"
+  | "User"
+  | "NotificationRule"
+  | "SystemCounter";
 
 export type AuditAction =
   | "CREATE"
   | "UPDATE"
   | "STATUS_CHANGE"
+  | "REVIEW"
   | "ACTIVATE"
-  | "DEACTIVATE";
+  | "DEACTIVATE"
+  | "ARCHIVE"
+  | "RESTORE"
+  | "COMMENT"
+  | "ATTACHMENT_ADDED"
+  | "ATTACHMENT_REMOVED"
+  | "LOGIN"
+  | "PASSWORD_CHANGED"
+  | "PASSWORD_RESET"
+  | "ROLE_CHANGED"
+  | "COUNTER_ADJUSTED"
+  | "COUNTER_INITIALIZED";
 
 export type AuditChanges = Record<string, unknown>;
 
@@ -34,6 +58,8 @@ export type AuditEntry = {
   entityId: string;
   action: AuditAction;
   changes?: AuditChanges;
+  /** Usuario autenticado responsable, o `null` si no lo hay. */
+  actorId?: string | null;
 };
 
 /**
@@ -50,8 +76,7 @@ export async function recordAudit(
       entityId: entry.entityId,
       action: entry.action,
       changes: (entry.changes ?? undefined) as Prisma.InputJsonValue | undefined,
-      // Sin autenticación no hay actor conocido (DEC-019).
-      actorId: null,
+      actorId: entry.actorId ?? null,
     },
   });
 }
@@ -75,3 +100,7 @@ export function diffChanges<T extends Record<string, unknown>>(
   }
   return changes;
 }
+
+/** Texto con el que se presenta un actor desconocido. */
+export const UNKNOWN_ACTOR_LABEL =
+  "Usuario no disponible (registro anterior al login)";

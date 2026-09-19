@@ -1,16 +1,17 @@
 // Esquema Prisma — Vincle Apps
 //
-// Estado tras DEV-003: además de los maestros de referencia introducidos en
-// DEV-002, el esquema incluye el núcleo transaccional del Gestor de Ofertas
-// (`Client`, `Person`, `Offer`, `OfferProfileDays`, `OfferStatusHistory`),
-// el contador técnico de numeración (`SystemCounter`) y la auditoría mínima
-// (`AuditLog`).
+// Estado tras DEV-004: a los maestros de referencia (DEV-002) y al núcleo
+// transaccional del Gestor de Ofertas (DEV-003) se añaden la identidad local
+// provisional (`User`, `Session`), la trazabilidad funcional de la oferta
+// (`OfferVersion`, `OfferComment`, `OfferAttachment`), el archivo lógico con
+// actor y las notificaciones internas configurables (`Notification`,
+// `NotificationRule` y sus condiciones y acciones).
 //
 // Siguen siendo conceptuales, y deliberadamente fuera de este esquema:
-// `User`, `Role`, `ImportBatch`, `ImportIssue` y cualquier entidad de ESM,
-// FACT, tarifas o implantaciones. Ver docs/architecture/DATA_MODEL.md para el
-// modelo conceptual completo y docs/decisions/DECISIONS.md para las
-// decisiones que enmarcan este alcance.
+// `ImportBatch`, `ImportIssue` y cualquier entidad de ESM, FACT, tarifas o
+// implantaciones. Ver docs/architecture/DATA_MODEL.md para el modelo
+// conceptual completo y docs/decisions/DECISIONS.md para las decisiones que
+// enmarcan este alcance.
 
 generator client {
   provider = "prisma-client-js"
@@ -78,9 +79,10 @@ model OfferStatus {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  offers                  Offer[]
-  statusHistoryAsPrevious OfferStatusHistory[] @relation("OfferStatusHistoryPrevious")
-  statusHistoryAsNew      OfferStatusHistory[] @relation("OfferStatusHistoryNew")
+  offers                     Offer[]
+  statusHistoryAsPrevious    OfferStatusHistory[]        @relation("OfferStatusHistoryPrevious")
+  statusHistoryAsNew         OfferStatusHistory[]        @relation("OfferStatusHistoryNew")
+  notificationRuleConditions NotificationRuleCondition[] @relation("NotificationRuleConditionStatus")
 
   @@map("offer_statuses")
 }
@@ -161,15 +163,24 @@ model CancellationReason {
 /// nombre sin depender de una extensión ni de un índice funcional que Prisma
 /// no modela. La aplicación la calcula siempre a partir de `name`.
 /// Ver docs/shared/MASTER_DATA.md.
+/// `code` es el código de cliente introducido por el usuario (DEV-004). Se
+/// conserva con la capitalización exacta que se escribe y solo se recortan
+/// los espacios exteriores. Es **funcionalmente obligatorio** en el alta y en
+/// cualquier guardado de edición, pero la columna es nullable: los clientes
+/// creados en DEV-003 no tienen código y no se les inventa ninguno. La
+/// restricción única de PostgreSQL ignora los `NULL`, de modo que conviven
+/// varios clientes «Código pendiente» sin colisionar.
 model Client {
   id             String   @id @default(cuid())
+  code           String?  @unique
   name           String
   nameNormalized String   @unique @map("name_normalized")
   isActive       Boolean  @default(true) @map("is_active")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
-  offers Offer[]
+  offers                     Offer[]
+  notificationRuleConditions NotificationRuleCondition[] @relation("NotificationRuleConditionClient")
 
   @@index([isActive, name])
   @@map("clients")
@@ -187,8 +198,11 @@ model Person {
   createdAt           DateTime @default(now()) @map("created_at")
   updatedAt           DateTime @updatedAt @map("updated_at")
 
-  commercialOffers     Offer[] @relation("OfferCommercial")
-  projectManagerOffers Offer[] @relation("OfferProjectManager")
+  commercialOffers           Offer[]                     @relation("OfferCommercial")
+  projectManagerOffers       Offer[]                     @relation("OfferProjectManager")
+  user                       User?
+  notificationRuleConditions NotificationRuleCondition[] @relation("NotificationRuleConditionPerson")
+  notificationRuleActions    NotificationRuleAction[]    @relation("NotificationRuleActionPerson")
 
   @@index([isActive, name])
   @@map("people")
@@ -229,11 +243,21 @@ model Offer {
   navisionOrder                   String?   @map("navision_order")
   cancellationReasonId            String?   @map("cancellation_reason_id")
 
-  // Control de registro. `deletedAt` queda preparado para la eliminación
-  // lógica aprobada (DEC-016); esta entrega no expone borrado en interfaz.
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
-  deletedAt DateTime? @map("deleted_at")
+  // Control de registro. `deletedAt` es el archivo lógico visible de DEV-004
+  // (DEC-016): una oferta archivada desaparece del listado ordinario pero
+  // nunca se borra físicamente, y se puede recuperar con el mismo número.
+  // `Anulado` es un estado de negocio distinto y no implica archivo.
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
+  archivedById String?   @map("archived_by_id")
+  restoredAt   DateTime? @map("restored_at")
+  restoredById String?   @map("restored_by_id")
+
+  /// Creador autenticado. Nullable: las ofertas anteriores al login no lo
+  /// tienen y no se les inventa uno (solo un ADMIN puede verlas si no le
+  /// corresponden por comercial o PM).
+  createdById String? @map("created_by_id")
 
   client             Client              @relation(fields: [clientId], references: [id])
   priority           Priority            @relation(fields: [priorityId], references: [id])
@@ -246,10 +270,20 @@ model Offer {
   language           Language?           @relation(fields: [languageId], references: [id])
   cancellationReason CancellationReason? @relation(fields: [cancellationReasonId], references: [id])
 
+  createdBy  User? @relation("OfferCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  archivedBy User? @relation("OfferArchivedBy", fields: [archivedById], references: [id], onDelete: SetNull)
+  restoredBy User? @relation("OfferRestoredBy", fields: [restoredById], references: [id], onDelete: SetNull)
+
   profileDays   OfferProfileDays[]
   statusHistory OfferStatusHistory[]
+  versions      OfferVersion[]
+  comments      OfferComment[]
+  attachments   OfferAttachment[]
+  notifications Notification[]
 
   @@index([deletedAt, offerDate])
+  @@index([createdById])
+  @@index([statusId, deletedAt])
   @@index([clientId])
   @@index([commercialId])
   @@index([projectManagerId])
@@ -297,8 +331,10 @@ model OfferStatusHistory {
   offer          Offer        @relation(fields: [offerId], references: [id])
   previousStatus OfferStatus? @relation("OfferStatusHistoryPrevious", fields: [previousStatusId], references: [id])
   newStatus      OfferStatus  @relation("OfferStatusHistoryNew", fields: [newStatusId], references: [id])
+  actor          User?        @relation(fields: [actorId], references: [id], onDelete: SetNull)
 
   @@index([offerId, changedAt])
+  @@index([actorId])
   @@index([previousStatusId])
   @@index([newStatusId])
   @@map("offer_status_history")
@@ -323,10 +359,12 @@ model SystemCounter {
 
 /// Auditoría mínima de altas, modificaciones y activaciones/desactivaciones.
 ///
-/// `actorId` es nullable y permanece siempre `null` mientras no exista
-/// autenticación (DEC-019). `changes` guarda una representación estructurada
-/// de los campos modificados; nunca credenciales, cadenas de conexión ni
-/// trazas técnicas. Ver docs/architecture/SECURITY.md.
+/// `actorId` referencia al usuario autenticado desde DEV-004. Sigue siendo
+/// nullable para conservar íntegros los registros anteriores al login, que se
+/// muestran como «Usuario no disponible (registro anterior al login)».
+/// `changes` guarda una representación estructurada de los campos
+/// modificados; nunca credenciales, tokens, contenido binario ni rutas
+/// físicas. Ver docs/architecture/SECURITY.md.
 model AuditLog {
   id         String   @id @default(cuid())
   entityType String   @map("entity_type")
@@ -336,7 +374,310 @@ model AuditLog {
   actorId    String?  @map("actor_id")
   createdAt  DateTime @default(now()) @map("created_at")
 
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
   @@index([entityType, entityId, createdAt])
   @@index([createdAt])
+  @@index([actorId])
   @@map("audit_logs")
+}
+
+// ---------------------------------------------------------------------------
+// Identidad local provisional (DEV-004)
+// ---------------------------------------------------------------------------
+
+/// Rol de acceso a la plataforma (DEC-055). Solo dos valores en esta fase.
+enum UserRole {
+  ADMIN
+  USER
+}
+
+/// Cuenta de acceso local provisional.
+///
+/// Sustituye a la ausencia total de autenticación de DEV-003 (`DEC-019`), pero
+/// **no** es el mecanismo corporativo definitivo: `DEC-056` (SSO o proveedor
+/// final) sigue pendiente.
+///
+/// `username` se normaliza a minúsculas sin espacios exteriores y esa forma
+/// normalizada es la que lleva la restricción única. `passwordHash` guarda
+/// únicamente una cadena `scrypt$N$r$p$sal$hash`: jamás una contraseña en
+/// claro, y nunca se envía al cliente.
+model User {
+  id                 String   @id @default(cuid())
+  username           String   @unique
+  passwordHash       String   @map("password_hash")
+  role               UserRole @default(USER)
+  isActive           Boolean  @default(true) @map("is_active")
+  mustChangePassword Boolean  @default(true) @map("must_change_password")
+  personId           String   @unique @map("person_id")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  person Person @relation(fields: [personId], references: [id])
+
+  sessions            Session[]
+  auditLogs           AuditLog[]
+  statusHistory       OfferStatusHistory[]
+  createdOffers       Offer[]              @relation("OfferCreatedBy")
+  archivedOffers      Offer[]              @relation("OfferArchivedBy")
+  restoredOffers      Offer[]              @relation("OfferRestoredBy")
+  offerVersions       OfferVersion[]
+  comments            OfferComment[]
+  uploadedAttachments OfferAttachment[]    @relation("OfferAttachmentUploadedBy")
+  removedAttachments  OfferAttachment[]    @relation("OfferAttachmentRemovedBy")
+  notifications       Notification[]       @relation("NotificationRecipient")
+  causedNotifications Notification[]       @relation("NotificationActor")
+
+  @@index([isActive])
+  @@map("users")
+}
+
+/// Sesión de acceso.
+///
+/// La base de datos guarda **solo el hash SHA-256 del token** (`tokenHash`);
+/// el token aleatorio de 256 bits vive únicamente en la cookie `HttpOnly`.
+/// Cerrar sesión elimina la fila, de modo que el token deja de ser válido de
+/// inmediato aunque la cookie sobreviva en el navegador.
+model Session {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique @map("token_hash")
+  userId    String   @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  expiresAt DateTime @map("expires_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+// ---------------------------------------------------------------------------
+// Trazabilidad funcional de la oferta (DEV-004)
+// ---------------------------------------------------------------------------
+
+/// Versión funcional inmutable de una oferta.
+///
+/// La auditoría técnica registra *qué campo cambió*; esta tabla conserva la
+/// *instantánea completa* de la oferta en un momento dado, con los códigos y
+/// nombres presentables de cada maestro además de sus identificadores, para
+/// que una versión antigua siga siendo legible aunque después se renombre un
+/// catálogo. `version` empieza en 1 y es única dentro de la oferta: la
+/// restricción única de PostgreSQL impide que dos guardados simultáneos
+/// creen el mismo número. Nunca se edita ni se elimina una versión.
+model OfferVersion {
+  id        String   @id @default(cuid())
+  offerId   String   @map("offer_id")
+  version   Int
+  createdAt DateTime @default(now()) @map("created_at")
+  authorId  String?  @map("author_id")
+  snapshot  Json
+
+  offer  Offer @relation(fields: [offerId], references: [id])
+  author User? @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@unique([offerId, version])
+  @@index([offerId, createdAt])
+  @@map("offer_versions")
+}
+
+/// Comentario interno de una oferta.
+///
+/// Es append-only desde la interfaz: no se edita ni se borra en esta fase. El
+/// autor y la fecha proceden siempre de la sesión, nunca del formulario.
+model OfferComment {
+  id        String   @id @default(cuid())
+  offerId   String   @map("offer_id")
+  authorId  String?  @map("author_id")
+  body      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  offer  Offer @relation(fields: [offerId], references: [id])
+  author User? @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([offerId, createdAt])
+  @@index([authorId])
+  @@map("offer_comments")
+}
+
+/// Metadatos de un adjunto de oferta.
+///
+/// `storageKey` es una clave **relativa** a la raíz configurada por
+/// `OFFER_ATTACHMENTS_DIR`, nunca una ruta absoluta, y su nombre físico es un
+/// identificador aleatorio: el nombre original del usuario solo se conserva
+/// como metadato para mostrarlo y para la cabecera de descarga. El binario
+/// vive fuera de `public/` y fuera de Git, y solo se sirve por una ruta
+/// autenticada y autorizada.
+///
+/// La retirada es lógica (`removedAt`): el adjunto deja de poder descargarse
+/// y queda trazado, pero no se purga el binario desde la interfaz.
+model OfferAttachment {
+  id           String    @id @default(cuid())
+  offerId      String    @map("offer_id")
+  originalName String    @map("original_name")
+  storageKey   String    @unique @map("storage_key")
+  contentType  String    @map("content_type")
+  sizeBytes    Int       @map("size_bytes")
+  uploadedById String?   @map("uploaded_by_id")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  removedAt    DateTime? @map("removed_at")
+  removedById  String?   @map("removed_by_id")
+
+  offer      Offer @relation(fields: [offerId], references: [id])
+  uploadedBy User? @relation("OfferAttachmentUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
+  removedBy  User? @relation("OfferAttachmentRemovedBy", fields: [removedById], references: [id], onDelete: SetNull)
+
+  @@index([offerId, createdAt])
+  @@index([removedAt])
+  @@map("offer_attachments")
+}
+
+// ---------------------------------------------------------------------------
+// Notificaciones internas (DEV-004, DEC-053)
+// ---------------------------------------------------------------------------
+
+/// Disparadores admitidos. Lista cerrada, deliberadamente corta: esta fase no
+/// construye un motor genérico de workflow para otros módulos.
+enum NotificationTrigger {
+  OFFER_CREATED
+  OFFER_STATUS_CHANGED
+  OFFER_COMMENT_ADDED
+  OFFER_ATTACHMENT_ADDED
+  OFFER_PENDING_PM_REVIEW
+  OFFER_PENDING_SALES_REVIEW
+}
+
+/// Canal de entrega de una regla.
+///
+/// `INTERNAL_AND_EMAIL` conserva la *intención* elegida por Administración,
+/// pero en esta entrega el email no se configura ni se envía: solo se genera
+/// la notificación interna. No se conecta ningún proveedor y no se registra
+/// ningún envío, ni correcto ni fallido.
+enum NotificationChannel {
+  INTERNAL
+  INTERNAL_AND_EMAIL
+}
+
+/// Campo evaluable por una condición de regla.
+enum NotificationConditionField {
+  STATUS
+  PROJECT_MANAGER
+  COMMERCIAL
+  CREATOR
+  CLIENT
+  ARCHIVED
+}
+
+/// Operadores admitidos: cerrados y sencillos, sin expresiones libres.
+enum NotificationConditionOperator {
+  IS
+  IS_NOT
+}
+
+/// Bloque al que pertenece una condición.
+enum NotificationConditionGroup {
+  ALL
+  ANY
+}
+
+/// Tipo de destinatario de una acción de regla.
+enum NotificationRecipientKind {
+  PROJECT_MANAGER
+  COMMERCIAL
+  CREATOR
+  ALL_ADMINS
+  SPECIFIC_PERSON
+}
+
+/// Regla configurable de notificación, al estilo de un disparador.
+model NotificationRule {
+  id          String              @id @default(cuid())
+  key         String?             @unique
+  name        String
+  description String?
+  isActive    Boolean             @default(true) @map("is_active")
+  trigger     NotificationTrigger
+  channel     NotificationChannel @default(INTERNAL)
+  sortOrder   Int                 @default(0) @map("sort_order")
+  createdAt   DateTime            @default(now()) @map("created_at")
+  updatedAt   DateTime            @updatedAt @map("updated_at")
+
+  conditions    NotificationRuleCondition[]
+  actions       NotificationRuleAction[]
+  notifications Notification[]
+
+  @@index([trigger, isActive])
+  @@map("notification_rules")
+}
+
+/// Condición de una regla. El valor se guarda en la columna tipada que
+/// corresponde al campo, para que PostgreSQL garantice la integridad
+/// referencial en lugar de un texto libre.
+model NotificationRuleCondition {
+  id           String                        @id @default(cuid())
+  ruleId       String                        @map("rule_id")
+  group        NotificationConditionGroup
+  field        NotificationConditionField
+  operator     NotificationConditionOperator
+  statusId     String?                       @map("status_id")
+  personId     String?                       @map("person_id")
+  clientId     String?                       @map("client_id")
+  booleanValue Boolean?                      @map("boolean_value")
+
+  rule   NotificationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  status OfferStatus?     @relation("NotificationRuleConditionStatus", fields: [statusId], references: [id])
+  person Person?          @relation("NotificationRuleConditionPerson", fields: [personId], references: [id])
+  client Client?          @relation("NotificationRuleConditionClient", fields: [clientId], references: [id])
+
+  @@index([ruleId])
+  @@index([statusId])
+  @@index([personId])
+  @@index([clientId])
+  @@map("notification_rule_conditions")
+}
+
+/// Acción de destinatario de una regla. No admite direcciones externas ni
+/// plantillas libres: solo los destinatarios derivados de la propia oferta o
+/// una persona concreta con usuario activo.
+model NotificationRuleAction {
+  id       String                    @id @default(cuid())
+  ruleId   String                    @map("rule_id")
+  kind     NotificationRecipientKind
+  personId String?                   @map("person_id")
+
+  rule   NotificationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  person Person?          @relation("NotificationRuleActionPerson", fields: [personId], references: [id])
+
+  @@index([ruleId])
+  @@index([personId])
+  @@map("notification_rule_actions")
+}
+
+/// Notificación interna entregada a un usuario concreto.
+///
+/// `dedupeKey` es la clave de idempotencia del evento: si dos reglas producen
+/// exactamente la misma notificación dentro del mismo evento, la restricción
+/// única impide duplicarla.
+model Notification {
+  id        String              @id @default(cuid())
+  userId    String              @map("user_id")
+  offerId   String?             @map("offer_id")
+  ruleId    String?             @map("rule_id")
+  trigger   NotificationTrigger
+  channel   NotificationChannel @default(INTERNAL)
+  title     String
+  body      String
+  actorId   String?             @map("actor_id")
+  dedupeKey String              @unique @map("dedupe_key")
+  createdAt DateTime            @default(now()) @map("created_at")
+  readAt    DateTime?           @map("read_at")
+
+  user  User              @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  actor User?             @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+  offer Offer?            @relation(fields: [offerId], references: [id])
+  rule  NotificationRule? @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+
+  @@index([userId, readAt, createdAt])
+  @@index([offerId])
+  @@map("notifications")
 }

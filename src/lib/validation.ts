@@ -47,6 +47,24 @@ export function requiredText(label: string, maxLength: number) {
     });
 }
 
+/**
+ * Texto obligatorio que solo recorta espacios exteriores, sin colapsar
+ * espacios internos ni tocar la capitalización. Uso: códigos que el usuario
+ * escribe literalmente (por ejemplo, el código de cliente), donde
+ * `requiredText` normalizaría de más.
+ */
+export function requiredExactText(label: string, maxLength: number) {
+  return z
+    .string()
+    .transform((value) => value.trim())
+    .refine((value) => value.length > 0, {
+      message: `${label} es obligatorio.`,
+    })
+    .refine((value) => value.length <= maxLength, {
+      message: `${label} no puede superar ${maxLength} caracteres.`,
+    });
+}
+
 /** Texto opcional: cadena vacía equivale a “sin valor” (`null`). */
 export function optionalText(label: string, maxLength: number) {
   return z

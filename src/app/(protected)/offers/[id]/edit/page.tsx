@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { updateOfferAction } from "@/modules/offers/actions";
 import { getOfferDetail, getOfferFormOptions } from "@/modules/offers/data";
 import { OfferForm } from "@/modules/offers/offer-form";
+import { requireUser } from "@/modules/auth/session";
 
 export const metadata: Metadata = {
   title: "Modificar oferta · Vincle Apps",
@@ -17,8 +18,9 @@ export default async function EditOfferPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const user = await requireUser();
   const { id } = await params;
-  const offer = await getOfferDetail(id);
+  const offer = await getOfferDetail(id, user);
 
   if (!offer) {
     notFound();

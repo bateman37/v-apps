@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db/prisma";
 
 export type ClientRow = {
   id: string;
+  code: string | null;
   name: string;
   isActive: boolean;
   offerCount: number;
@@ -37,7 +38,10 @@ export async function getClients(filters: ClientFilters): Promise<ClientRow[]> {
   const where: Prisma.ClientWhereInput = {};
 
   if (filters.q) {
-    where.name = { contains: filters.q, mode: "insensitive" };
+    where.OR = [
+      { name: { contains: filters.q, mode: "insensitive" } },
+      { code: { contains: filters.q, mode: "insensitive" } },
+    ];
   }
   if (filters.state !== "all") {
     where.isActive = filters.state === "active";
@@ -47,6 +51,7 @@ export async function getClients(filters: ClientFilters): Promise<ClientRow[]> {
     where,
     select: {
       id: true,
+      code: true,
       name: true,
       isActive: true,
       // Recuento agregado por Prisma en la misma consulta: no hay N+1.
@@ -57,6 +62,7 @@ export async function getClients(filters: ClientFilters): Promise<ClientRow[]> {
 
   return clients.map((client) => ({
     id: client.id,
+    code: client.code,
     name: client.name,
     isActive: client.isActive,
     offerCount: client._count.offers,

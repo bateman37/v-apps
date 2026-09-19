@@ -43,7 +43,7 @@ Desde DEV-003 este formulario existe realmente en `/offers/new` (alta) y `/offer
 - Segmentación.
 - Observaciones.
 - Idioma.
-- Pedido o identificador de Navision — salvo cuando una futura regla de estado lo exija (pendiente, ver [`../decisions/DECISIONS.md`](../decisions/DECISIONS.md)).
+- Pedido o identificador de Navision — **obligatorio cuando el estado es `Aceptado`** (`DEC-052`, implementado; ver [`STATUSES.md`](STATUSES.md)), opcional en el resto de estados.
 - Motivo de cancelación — obligatorio únicamente cuando el estado de la oferta sea `Anulado`.
 
 ## Implantación

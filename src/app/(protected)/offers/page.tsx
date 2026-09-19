@@ -7,6 +7,7 @@ import {
 } from "@/modules/offers/data";
 import { OffersListScreen } from "@/modules/offers/offers-list-screen";
 import { DatabaseConnectionError } from "@/components/ui/database-connection-error";
+import { requireUser } from "@/modules/auth/session";
 
 export const metadata: Metadata = {
   title: "Gestor de Ofertas · Vincle Apps",
@@ -20,13 +21,14 @@ export default async function OffersPage({
 }: {
   searchParams: Promise<RawSearchParams>;
 }) {
+  const user = await requireUser();
   const filters = parseOfferListParams(await searchParams);
 
   let data;
   try {
     const [filterOptions, result] = await Promise.all([
       getOfferFilterOptions(),
-      getOffersPage(filters),
+      getOffersPage(filters, user),
     ]);
     data = { filterOptions, result };
   } catch (error) {
